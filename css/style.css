@@ -374,13 +374,7 @@ code {
 .stage-btn.cleared { border-color: var(--accent); color: var(--accent); }
 .stage-btn.current { background: #263247; }
 
-/* ---------- ルール ---------- */
-.rules { font-size: 13.5px; line-height: 1.85; color: #c9d3de; }
-.rules p { margin: 0 0 12px; }
-.rules-list { list-style: none; margin: 0 0 12px; padding: 0; }
-.rules-list li { margin-bottom: 7px; }
-.rules-note { color: var(--muted); font-size: 12.5px; }
-
+/* ---------- あそびかたメニュー ---------- */
 .chip {
   display: inline-block;
   min-width: 44px;
@@ -497,20 +491,33 @@ code {
   transform: translate(-50%, -50%);
 }
 
-.demo-move { transition: transform .62s cubic-bezier(.35, .1, .25, 1); }
-.demo-grabbed {
-  box-shadow: 0 8px 18px #000a;
-  filter: brightness(1.1);
-}
-.demo-consumed { animation: demoConsume .32s ease forwards; }
+.demo-consumed { animation: demoConsume .3s ease forwards; }
+.demo-gone { opacity: 0; }
 .demo-hit { animation: hit .34s ease; }
 .demo-vanish { animation: vanish .45s ease forwards; }
-.demo-reject { transition: transform .3s ease; }
+.demo-dragging { opacity: .28; }
+.demo-target-ok { box-shadow: 0 0 0 3px #ffffff9c; }
 .demo-no { box-shadow: 0 0 0 3px #ff6b6b; }
 
 @keyframes demoConsume {
-  to { transform: translateX(var(--dx, 0)) scale(.3); opacity: 0; }
+  to { transform: scale(.55); opacity: 0; }
 }
+
+/* ドラッグ中の分身。実際のゲームと同じく指について動く */
+.demo-ghost {
+  position: absolute;
+  z-index: 6;
+  opacity: 0;
+  pointer-events: none;
+  transition: transform .36s cubic-bezier(.3, .05, .3, 1), opacity .18s ease;
+}
+.demo-ghost.show { opacity: 1; }
+.demo-ghost.lifted .demo-block {
+  transform: scale(1.1) rotate(-3deg);
+  box-shadow: 0 10px 20px #000b;
+  filter: brightness(1.08);
+}
+.demo-ghost .demo-block { transition: transform .18s ease, box-shadow .18s ease; }
 
 /* 変化したbitを光らせる */
 .bit-changed { animation: bitFlash .7s ease; }
@@ -529,19 +536,26 @@ code {
 /* 指先のマーカー */
 .demo-pointer {
   position: absolute;
-  width: 17px;
-  height: 17px;
-  margin: -8px 0 0 -8px;
+  width: 18px;
+  height: 18px;
+  margin: -9px 0 0 -9px;
   border-radius: 50%;
-  background: #ffffffcc;
-  box-shadow: 0 0 0 5px #ffffff2e;
+  background: #ffffffd9;
+  box-shadow: 0 0 0 6px #ffffff26;
   opacity: 0;
-  z-index: 5;
+  z-index: 7;
   pointer-events: none;
-  transition: opacity .2s ease;
+  transition: transform .36s cubic-bezier(.3, .05, .3, 1),
+              opacity .18s ease, box-shadow .18s ease;
 }
 .demo-pointer.show { opacity: 1; }
-.demo-pointer.demo-move { transition: transform .62s cubic-bezier(.35, .1, .25, 1), opacity .2s ease; }
+.demo-pointer.pressed { box-shadow: 0 0 0 3px #ffffff40; }
+.demo-pointer.released { animation: pointerRelease .35s ease; }
+
+@keyframes pointerRelease {
+  0% { box-shadow: 0 0 0 3px #ffffff40; }
+  100% { box-shadow: 0 0 0 14px #ffffff00; }
+}
 
 /* 結果の吹き出し */
 .demo-badge {
@@ -609,19 +623,45 @@ code {
 .swatch-1 { background: #ff4d5e; }
 .swatch-0 { background: #ff4d5e1f; }
 
-/* ルール画面からチュートリアルを見返す */
-.rules-tuts {
-  margin-top: 16px;
-  padding-top: 14px;
-  border-top: 1px solid var(--line);
+.help-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: left;
 }
-.rules-tuts-label {
-  display: block;
-  font-size: 12px;
-  color: var(--muted);
-  margin-bottom: 8px;
+.help-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  appearance: none;
+  border: 1px solid var(--line);
+  background: #1c2331;
+  color: var(--text);
+  border-radius: 10px;
+  padding: 11px 13px;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: left;
 }
-.rules-tuts-btns { display: flex; flex-wrap: wrap; gap: 6px; }
+.help-item:hover { border-color: #48566b; background: #212a3a; }
+.help-item .chip { margin-right: 0; flex: none; }
+.help-icon {
+  flex: none;
+  display: inline-block;
+  min-width: 44px;
+  text-align: center;
+  border-radius: 5px;
+  padding: 1px 7px;
+  background: #37455c;
+  color: var(--text);
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+  font-weight: 700;
+}
+.help-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.help-name { font-size: 14px; }
+.help-desc { font-size: 11.5px; color: var(--muted); }
 
 .footer {
   margin-top: 18px;

@@ -14,7 +14,7 @@
 <header class="topbar">
   <h1 class="title"><span class="title-bit">bit</span>-0110</h1>
   <div class="topbar-actions">
-    <button id="btn-rules" class="btn btn-ghost" type="button">ルール</button>
+    <button id="btn-help" class="btn btn-ghost" type="button">あそびかた</button>
     <button id="btn-stages" class="btn btn-ghost" type="button">ステージ</button>
   </div>
 </header>
@@ -95,35 +95,13 @@
   </div>
 </div>
 
-<!-- ルール -->
-<div id="rules-modal" class="modal" hidden>
-  <div class="modal-card modal-card-wide">
-    <h3 class="modal-title">ルール</h3>
-    <div class="rules">
-      <p>ブロックは <b>0と1の4桁のbit</b>（例: <code>0011</code>）を持っている。<b>悪ブロックのbitを 0000 か 1111 にすれば撃破。</b>全部倒せばクリア。</p>
-      <p>悪ブロック以外は好きなマスへ動かせる。<b>演算ブロックを他のブロックに重ねると演算が起きて、重ねた側は消える。</b></p>
-      <ul class="rules-list">
-        <li><span class="chip chip-or">OR</span>自分が1のところを1にする。<code>0101 + OR 1010 → 1111</code></li>
-        <li><span class="chip chip-and">AND</span>自分が0のところを0にする。<code>0110 + AND 1001 → 0000</code></li>
-        <li><span class="chip chip-xor">XOR</span>自分が1のところを反転する。<code>0101 + XOR 0101 → 0000</code></li>
-        <li><span class="chip chip-not">NOT</span>bitを持たない。相手の0と1を全部ひっくり返す。<code>0110 → 1001</code></li>
-      </ul>
-      <p>演算ブロック同士も重ねられる。種類は<b>重ねられた側</b>のまま、bitだけ変わる。<code>OR 1100 + OR 0011 → OR 1111</code>／<code>AND 0110 + NOT → AND 1001</code></p>
-      <p class="rules-note">NOTはbitを持たないので、NOTを<em>対象</em>にはできない。<br>
-      ブロックは使うと消えるので、無駄打ちすると詰む。詰んだら自動で知らせるので「もどす」で戻ろう。</p>
-      <p class="rules-note">操作: ブロックを<b>ドラッグ</b>して重ねる／空きマスへ置く。<b>タップして選び、対象をタップ</b>でもOK。</p>
-      <div class="rules-tuts">
-        <span class="rules-tuts-label">チュートリアルをもう一度見る</span>
-        <div class="rules-tuts-btns">
-          <button class="btn btn-small" type="button" data-tut="INTRO">あそびかた</button>
-          <button class="btn btn-small" type="button" data-tut="NOT">NOT</button>
-          <button class="btn btn-small" type="button" data-tut="AND">AND</button>
-          <button class="btn btn-small" type="button" data-tut="XOR">XOR</button>
-        </div>
-      </div>
-    </div>
+<!-- あそびかた（チュートリアル一覧） -->
+<div id="help-modal" class="modal" hidden>
+  <div class="modal-card">
+    <h3 class="modal-title">あそびかた</h3>
+    <div id="help-list" class="help-list"></div>
     <div class="modal-actions">
-      <button id="btn-rules-close" class="btn btn-primary" type="button">とじる</button>
+      <button id="btn-help-close" class="btn btn-primary" type="button">とじる</button>
     </div>
   </div>
 </div>

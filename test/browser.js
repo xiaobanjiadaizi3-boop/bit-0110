@@ -68,9 +68,15 @@ async function dragToCell(page, srcId, cx, cy) {
   await page.mouse.up();
 }
 
-// チュートリアルは新ブロック解禁のステージで一度だけ出る
+// チュートリアルは新ブロック解禁のステージで一度だけ出る。
+// ステージ1では「あそびかた」→「OR」と続けて出るので、閉じるまでスキップする。
 async function closeTutorial(page) {
-  if (await page.locator('#tutorial-modal').isVisible()) await page.click('#btn-tut-skip');
+  for (let i = 0; i < 6; i++) {
+    if (!(await page.locator('#tutorial-modal').isVisible())) return;
+    await page.click('#btn-tut-skip');
+    await page.waitForTimeout(60);
+  }
+  throw new Error('チュートリアルが閉じられない');
 }
 
 const nextHint = (page) => page.evaluate(() => window.BitCore.hint(window.BitGame.state));
@@ -92,7 +98,7 @@ const snapshot = (page) => page.evaluate(() => ({
     localStorage.setItem(k, JSON.stringify({
       cleared: Array.from({ length: 1000 }, (_, i) => i),
       last: 0,
-      seenTutorials: ['INTRO', 'NOT', 'AND', 'XOR']
+      seenTutorials: ['INTRO', 'OR', 'NOT', 'AND', 'XOR']
     }));
   }, [STORE_KEY]);
 
@@ -283,23 +289,35 @@ const snapshot = (page) => page.evaluate(() => ({
     await p3.goto(base);
 
     ok(await p3.locator('#tutorial-modal').isVisible(), '初回起動でチュートリアルが出る');
-    ok(!(await p3.locator('#rules-modal').isVisible()), '初回のルール説明モーダルは出ない');
+    ok(!(await p3.locator('#help-modal').isVisible()), '文章だけのルール説明は出ない');
+    ok(await p3.evaluate(() => document.body.textContent.indexOf('自分が1のところを1にする。') === -1),
+      '長文のルール説明はページから消えている');
 
-    // ステップを最後まで進められる／デモが描画されている
-    const intro = await p3.evaluate(() => window.BitTutorial.TUTORIALS.INTRO.steps.length);
-    ok(intro >= 4, 'あそびかたは ' + intro + ' ステップある');
-    for (let s = 0; s < intro; s++) {
-      const dots = await p3.locator('.tut-dot.active').count();
-      const demoBlocks = await p3.locator('#tut-demo .demo-block').count();
-      if (dots !== 1 || demoBlocks < 1) {
-        ok(false, `ステップ${s + 1}: アクティブなドット${dots}個 / デモのブロック${demoBlocks}個`);
-        break;
+    // 「あそびかた」→「OR」の順に、2本続けて出る
+    const counts = await p3.evaluate(() => ({
+      intro: window.BitTutorial.TUTORIALS.INTRO.steps.length,
+      or: window.BitTutorial.TUTORIALS.OR.steps.length
+    }));
+    ok(await p3.textContent('#tut-kicker') === 'ゲームの基本', '1本目は「あそびかた」');
+
+    const seq = [['INTRO', counts.intro], ['OR', counts.or]];
+    for (const [key, n] of seq) {
+      for (let s = 0; s < n; s++) {
+        const dots = await p3.locator('.tut-dot').count();
+        const active = await p3.locator('.tut-dot.active').count();
+        const demoBlocks = await p3.locator('#tut-demo .demo-block').count();
+        if (dots !== n || active !== 1 || demoBlocks < 1) {
+          ok(false, `${key} ステップ${s + 1}: ドット${dots}/${n} アクティブ${active} ブロック${demoBlocks}`);
+          break;
+        }
+        await p3.click('#btn-tut-next');
+        await p3.waitForTimeout(80);
       }
-      if (s === intro - 1) {
-        ok(await p3.textContent('#btn-tut-next') === 'はじめる', '最後のステップは「はじめる」になる');
+      if (key === 'INTRO') {
+        ok(await p3.locator('#tutorial-modal').isVisible() &&
+           await p3.textContent('#tut-kicker') === 'ORブロック',
+          'あそびかたのあとに続けてORのチュートリアルが出る');
       }
-      await p3.click('#btn-tut-next');
-      await p3.waitForTimeout(60);
     }
     ok(!(await p3.locator('#tutorial-modal').isVisible()), '最後まで進めると閉じる');
 
@@ -337,12 +355,51 @@ const snapshot = (page) => page.evaluate(() => ({
         `${w.tag} のチュートリアルは2回目には出ない`);
     }
 
-    // ルール画面から見返せる
-    await p3.click('#btn-rules');
-    await p3.click('[data-tut="XOR"]');
+    // 「あそびかた」メニューから見返せる
+    await p3.click('#btn-help');
+    const menuItems = await p3.locator('#help-list .help-item').count();
+    ok(menuItems === 5, 'あそびかたメニューに5項目ある（' + menuItems + '）');
+    await p3.click('#help-list [data-tut="XOR"]');
     await p3.waitForTimeout(80);
-    ok(await p3.locator('#tutorial-modal').isVisible(), 'ルール画面からチュートリアルを見返せる');
+    ok(await p3.locator('#tutorial-modal').isVisible() &&
+       await p3.textContent('#tut-kicker') === 'XORブロック',
+      'メニューからチュートリアルを見返せる');
     await p3.click('#btn-tut-skip');
+
+    // ドラッグ演出が動いているか（分身と指マーカーが表示される）
+    await p3.click('#btn-help');
+    await p3.click('#help-list [data-tut="OR"]');
+    await p3.waitForTimeout(900);
+    const dragging = await p3.evaluate(() => {
+      const g = document.querySelector('#tut-demo .demo-ghost');
+      const pt = document.querySelector('#tut-demo .demo-pointer');
+      const src = document.querySelector('#tut-demo .demo-src');
+      return {
+        ghostShown: !!g && g.classList.contains('show'),
+        ghostHasBlock: !!(g && g.querySelector('.block')),
+        lifted: !!g && g.classList.contains('lifted'),
+        pointerShown: !!pt && pt.classList.contains('show'),
+        srcDimmed: !!src && src.classList.contains('demo-dragging'),
+        moved: !!g && /translate\(/.test(g.style.transform)
+      };
+    });
+    ok(dragging.ghostShown && dragging.ghostHasBlock && dragging.lifted,
+      'ドラッグ中の分身が持ち上がって表示される');
+    ok(dragging.pointerShown && dragging.srcDimmed,
+      '指マーカーが出て、元のブロックは薄くなる');
+    ok(dragging.moved, '分身が対象へ向かって動く');
+    await p3.waitForTimeout(900);
+    const dropped = await p3.evaluate(() => {
+      const dst = document.querySelector('#tut-demo .demo-dst');
+      const src = document.querySelector('#tut-demo .demo-src');
+      return {
+        srcConsumed: !!src && src.classList.contains('demo-consumed'),
+        dstBits: dst ? [...dst.querySelectorAll('.bit')].map(b => b.textContent).join('') : ''
+      };
+    });
+    ok(dropped.srcConsumed, '落とすと重ねた側のブロックが消える');
+    ok(dropped.dstBits === '1111', '対象のbitが 0101 → 1111 に変わる（実際は ' + dropped.dstBits + '）');
+    await closeTutorial(p3);
 
     await ctx3.close();
   }

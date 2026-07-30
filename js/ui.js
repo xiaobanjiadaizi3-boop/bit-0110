@@ -406,14 +406,16 @@
     maybeTutorial(i);
   }
 
-  /* 新しいブロックが解禁されるステージに来たら、一度だけチュートリアルを出す */
+  /* 新しいブロックが解禁されるステージに来たら、まだ見ていないものを順に出す */
   function maybeTutorial(i) {
     if (!Tutorial) return;
-    var key = Tutorial.keyForStage(LEVELS, WORLDS, i);
-    if (!key || progress.seenTutorials.indexOf(key) !== -1) return;
-    progress.seenTutorials.push(key);
+    var pending = Tutorial.keyForStage(LEVELS, WORLDS, i).filter(function (k) {
+      return progress.seenTutorials.indexOf(k) === -1;
+    });
+    if (!pending.length) return;
+    pending.forEach(function (k) { progress.seenTutorials.push(k); });
     saveProgress(progress);
-    Tutorial.open(key);
+    Tutorial.open(pending);
   }
 
   function undo() {
@@ -504,19 +506,16 @@
     $('stage-modal').hidden = false;
   });
   $('btn-stage-close').addEventListener('click', function () { $('stage-modal').hidden = true; });
-  $('btn-rules').addEventListener('click', function () { $('rules-modal').hidden = false; });
-  $('btn-rules-close').addEventListener('click', function () { $('rules-modal').hidden = true; });
-
-  // ルール画面からチュートリアルを見返す
-  Array.prototype.forEach.call(document.querySelectorAll('[data-tut]'), function (b) {
-    b.addEventListener('click', function () {
-      $('rules-modal').hidden = true;
-      Tutorial.open(b.dataset.tut);
-    });
+  // 「あそびかた」= チュートリアル一覧。ここからいつでも見返せる。
+  Tutorial.buildMenu($('help-list'), function (key) {
+    $('help-modal').hidden = true;
+    Tutorial.open(key);
   });
+  $('btn-help').addEventListener('click', function () { $('help-modal').hidden = false; });
+  $('btn-help-close').addEventListener('click', function () { $('help-modal').hidden = true; });
 
   // モーダルの外側をクリックで閉じる（クリア画面は誤操作防止のため除く）
-  ['stage-modal', 'rules-modal'].forEach(function (id) {
+  ['stage-modal', 'help-modal'].forEach(function (id) {
     $(id).addEventListener('click', function (ev) {
       if (ev.target === this) this.hidden = true;
     });
@@ -526,7 +525,7 @@
     if (Tutorial && Tutorial.isOpen()) return;   // チュートリアル中はゲーム側のキー操作を止める
     if (ev.key === 'Escape') {
       $('stage-modal').hidden = true;
-      $('rules-modal').hidden = true;
+      $('help-modal').hidden = true;
       clearSelection();
     } else if (ev.key === 'z' && (ev.ctrlKey || ev.metaKey)) {
       ev.preventDefault();

@@ -1,7 +1,8 @@
 /*
  * tutorial.js — 視覚チュートリアル。
- * 実際のブロックと同じ見た目のミニ盤面で、重ねる→bitが変わる→消える、を
- * アニメーションで見せる。新しいブロックが解禁されるワールドの頭で出る。
+ * 盤面と同じ見た目のミニブロックで、実際のドラッグ操作
+ * （つかむ → 分身が指について動く → 重ねる → bitが変わる → 消える）を再現する。
+ * 新しいブロックが解禁されるワールドの頭で自動的に開く。
  */
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory();
@@ -16,7 +17,8 @@
   var TUTORIALS = {
     INTRO: {
       badge: 'あそびかた',
-      title: 'bit-0110 のルール',
+      title: 'ゲームの基本',
+      menu: { name: 'あそびかた', desc: 'bit・撃破の条件・操作方法', icon: '?' },
       steps: [
         {
           title: 'ブロックは4桁のbitを持つ',
@@ -29,19 +31,37 @@
           demo: { kind: 'goal' }
         },
         {
+          title: '悪ブロック以外はドラッグで動かせる',
+          text: '空いているマスへドラッグして置ける（手数には数えない）。タップで選んでから置きたいマスをタップしてもOK。',
+          demo: { kind: 'move', src: { type: 'or', bits: '1010' } }
+        },
+        {
           title: '重ねると演算が起きる',
-          text: '演算ブロックを悪ブロックにドラッグして重ねよう。OR は「自分が 1 のところを 1 にする」。重ねた側は消える。',
+          text: '演算ブロックを悪ブロックの上へドラッグすると演算が起きて、重ねた側のブロックは消える。',
           demo: { kind: 'apply', src: { type: 'or', bits: '1000' }, dst: { type: 'bad', bits: '0111' } }
         },
         {
           title: '無駄打ちすると詰む',
           text: '効果のない相手に使っても、ブロックは消えてしまう。道具が足りなくなると倒せなくなる（詰み）ので、当てる前によく考えよう。',
           demo: { kind: 'apply', src: { type: 'or', bits: '0001' }, dst: { type: 'bad', bits: '0011' } }
+        }
+      ]
+    },
+
+    OR: {
+      badge: 'NEW BLOCK',
+      title: 'ORブロック',
+      menu: { name: 'OR', desc: '自分が1のところを1にする' },
+      steps: [
+        {
+          title: 'OR — 1のところを1にする',
+          text: 'OR は「自分が 1 になっているけたを、相手も 1 にする」。0 のけたには何もしない。',
+          demo: { kind: 'apply', src: { type: 'or', bits: '1010' }, dst: { type: 'bad', bits: '0101' } }
         },
         {
-          title: '悪ブロック以外は自由に動かせる',
-          text: '空いているマスへドラッグして置ける（手数には数えない）。タップで選んでから対象をタップしてもOK。',
-          demo: { kind: 'move', src: { type: 'or', bits: '1010' } }
+          title: '演算ブロック同士も重ねられる',
+          text: '演算ブロックは他の演算ブロックにも重ねられる。種類は重ねられた側のまま、bit だけが変わる。強い道具を作ってから当てよう。',
+          demo: { kind: 'apply', src: { type: 'or', bits: '0011' }, dst: { type: 'or', bits: '1100' } }
         }
       ]
     },
@@ -49,6 +69,7 @@
     NOT: {
       badge: 'NEW BLOCK',
       title: 'NOTブロック',
+      menu: { name: 'NOT', desc: '相手の0と1を全部ひっくり返す' },
       steps: [
         {
           title: 'NOT — 0と1を全部ひっくり返す',
@@ -56,8 +77,8 @@
           demo: { kind: 'apply', src: { type: 'not' }, dst: { type: 'bad', bits: '0110' } }
         },
         {
-          title: '演算ブロックも作り替えられる',
-          text: 'NOT は演算ブロックにも重ねられる。OR の bit を反転させれば、欲しい道具が作れる。種類は重ねられた側のまま変わらない。',
+          title: '演算ブロックを作り替える',
+          text: 'NOT は演算ブロックにも重ねられる。OR の bit を反転させれば、欲しい道具がその場で作れる。',
           demo: { kind: 'apply', src: { type: 'not' }, dst: { type: 'or', bits: '0110' } }
         },
         {
@@ -71,10 +92,11 @@
     AND: {
       badge: 'NEW BLOCK',
       title: 'ANDブロック',
+      menu: { name: 'AND', desc: '自分が0のところを0にする' },
       steps: [
         {
           title: 'AND — 0のところを0にする',
-          text: 'AND は「自分が 0 のところを 0 にする」。1 を削っていくブロックだ。',
+          text: 'AND は「自分が 0 になっているけたを、相手も 0 にする」。1 を削っていくブロックだ。',
           demo: { kind: 'apply', src: { type: 'and', bits: '1101' }, dst: { type: 'bad', bits: '0110' } }
         },
         {
@@ -88,10 +110,11 @@
     XOR: {
       badge: 'NEW BLOCK',
       title: 'XORブロック',
+      menu: { name: 'XOR', desc: '自分が1のところを反転する' },
       steps: [
         {
           title: 'XOR — 1のところを反転する',
-          text: 'XOR は「自分が 1 のところだけ反転させる」。0 は 1 に、1 は 0 になる。',
+          text: 'XOR は「自分が 1 になっているけただけ反転させる」。0 は 1 に、1 は 0 になる。',
           demo: { kind: 'apply', src: { type: 'xor', bits: '0011' }, dst: { type: 'bad', bits: '0110' } }
         },
         {
@@ -103,13 +126,15 @@
     }
   };
 
-  /* ステージ番号 → チュートリアルのキー（ワールドの先頭で出す） */
+  var MENU_ORDER = ['INTRO', 'OR', 'NOT', 'AND', 'XOR'];
+
+  /* ステージ番号 → そこで出すチュートリアルのキー配列 */
   function keyForStage(levels, worlds, index) {
     for (var i = 0; i < worlds.length; i++) {
       if (worlds[i].start !== index) continue;
-      return i === 0 ? 'INTRO' : worlds[i].tag;
+      return i === 0 ? ['INTRO', 'OR'] : [worlds[i].tag];
     }
-    return null;
+    return [];
   }
 
   /* ---------------- ミニブロックの描画 ---------------- */
@@ -142,6 +167,58 @@
     return m;
   }
 
+  /* ---------------- ドラッグ演出の共通部品 ----------------
+   * 実際のゲームと同じ挙動にする:
+   *   元のブロックは薄くその場に残り、分身(ゴースト)が指について動く。 */
+  function makeDragRig(stage) {
+    var ghostWrap = document.createElement('div');
+    ghostWrap.className = 'demo-ghost';
+    var pointer = document.createElement('div');
+    pointer.className = 'demo-pointer';
+    stage.appendChild(ghostWrap);
+    stage.appendChild(pointer);
+
+    return {
+      ghost: ghostWrap,
+      pointer: pointer,
+      // 元ブロックの位置にゴーストと指を置く
+      anchor: function (fromEl, spec) {
+        ghostWrap.innerHTML = '';
+        ghostWrap.appendChild(miniBlock(spec));
+        ghostWrap.style.left = fromEl.offsetLeft + 'px';
+        ghostWrap.style.top = fromEl.offsetTop + 'px';
+        pointer.style.left = (fromEl.offsetLeft + fromEl.offsetWidth / 2) + 'px';
+        pointer.style.top = (fromEl.offsetTop + fromEl.offsetHeight * 0.78) + 'px';
+        ghostWrap.style.transform = '';
+        pointer.style.transform = '';
+      },
+      grab: function () {
+        ghostWrap.classList.add('show', 'lifted');
+        pointer.classList.add('show', 'pressed');
+      },
+      // 掴んだまま (dx,dy) へ動かす
+      moveBy: function (dx, dy) {
+        ghostWrap.style.transform = 'translate(' + dx + 'px,' + dy + 'px)';
+        pointer.style.transform = 'translate(' + dx + 'px,' + dy + 'px)';
+      },
+      drop: function () {
+        ghostWrap.classList.remove('lifted');
+        pointer.classList.remove('pressed');
+        pointer.classList.add('released');
+      },
+      hide: function () {
+        ghostWrap.classList.remove('show', 'lifted');
+        pointer.classList.remove('show', 'pressed', 'released');
+      },
+      reset: function () {
+        ghostWrap.className = 'demo-ghost';
+        pointer.className = 'demo-pointer';
+        ghostWrap.style.transform = '';
+        pointer.style.transform = '';
+      }
+    };
+  }
+
   /* ---------------- デモのアニメーション ---------------- */
   // 各デモは {play, stop} を返す。play はループする。
   function buildDemo(host, demo, reduced) {
@@ -165,7 +242,7 @@
       host.appendChild(legend);
       var cells = blk.querySelectorAll('.bit');
       if (reduced) return { play: function () {}, stop: clear };
-      var loop = function () {
+      var bitLoop = function () {
         clear();
         for (var i = 0; i < cells.length; i++) {
           (function (i) {
@@ -176,10 +253,10 @@
         }
         t(300 + cells.length * 380 + 500, function () {
           for (var j = 0; j < cells.length; j++) cells[j].classList.remove('bit-focus');
-          t(600, loop);
+          t(600, bitLoop);
         });
       };
-      return { play: loop, stop: clear };
+      return { play: bitLoop, stop: clear };
     }
 
     /* --- 撃破条件 --- */
@@ -217,52 +294,50 @@
       return { play: goalLoop, stop: clear };
     }
 
-    /* --- 空きマスへの移動 --- */
+    /* --- 空きマスへドラッグして移動 --- */
     if (demo.kind === 'move') {
       stage.classList.add('demo-stage-move');
       var cellA = document.createElement('div');
       cellA.className = 'cell demo-cell';
       var cellB = document.createElement('div');
-      cellB.className = 'cell demo-cell demo-cell-target';
+      cellB.className = 'cell demo-cell';
       var mv = miniBlock(demo.src);
       mv.classList.add('demo-floating');
       stage.appendChild(cellA);
       stage.appendChild(cellB);
       stage.appendChild(mv);
-      var ptr = document.createElement('div');
-      ptr.className = 'demo-pointer';
-      stage.appendChild(ptr);
+      var mrig = makeDragRig(stage);
 
-      var placeMove = function () {
+      var placeMv = function () {
         mv.style.left = cellA.offsetLeft + 'px';
         mv.style.top = cellA.offsetTop + 'px';
-        ptr.style.left = (cellA.offsetLeft + cellA.offsetWidth / 2) + 'px';
-        ptr.style.top = (cellA.offsetTop + cellA.offsetHeight * 0.72) + 'px';
       };
-      var dxMove = function () { return cellB.offsetLeft - cellA.offsetLeft; };
-      if (reduced) { placeMove(); return { play: function () {}, stop: clear }; }
+      if (reduced) {
+        placeMv();
+        cellB.classList.add('demo-cell-target');
+        return { play: function () {}, stop: clear };
+      }
       var moveLoop = function () {
         clear();
-        placeMove();
-        mv.classList.remove('demo-move', 'demo-grabbed');
-        mv.style.transform = '';
-        ptr.style.transform = '';
-        ptr.classList.remove('show', 'demo-move');
-        t(400, function () {
-          ptr.classList.add('show');
-          mv.classList.add('demo-grabbed');
+        placeMv();
+        mv.classList.remove('demo-dragging');
+        cellB.classList.remove('demo-cell-target');
+        mrig.reset();
+        mrig.anchor(mv, demo.src);
+        var dx = function () { return cellB.offsetLeft - cellA.offsetLeft; };
+
+        t(350, function () { mrig.grab(); mv.classList.add('demo-dragging'); });
+        t(700, function () { mrig.moveBy(dx() * 0.5, -16); });
+        // 少し上にずらして持つ。移動先のマスが隠れないようにするため
+        t(1050, function () { mrig.moveBy(dx() - 8, -12); cellB.classList.add('demo-cell-target'); });
+        t(1450, function () {
+          mrig.drop();
+          mv.classList.remove('demo-dragging');
+          mv.style.left = cellB.offsetLeft + 'px';
+          cellB.classList.remove('demo-cell-target');
         });
-        t(750, function () {
-          mv.classList.add('demo-move');
-          ptr.classList.add('demo-move');
-          mv.style.transform = 'translateX(' + dxMove() + 'px)';
-          ptr.style.transform = 'translateX(' + dxMove() + 'px)';
-        });
-        t(1600, function () {
-          mv.classList.remove('demo-grabbed');
-          ptr.classList.remove('show');
-        });
-        t(2700, moveLoop);
+        t(1600, mrig.hide);
+        t(2900, moveLoop);
       };
       return { play: moveLoop, stop: clear };
     }
@@ -278,10 +353,7 @@
     stage.appendChild(srcEl);
     stage.appendChild(arrow);
     stage.appendChild(dstEl);
-
-    var pointer = document.createElement('div');
-    pointer.className = 'demo-pointer';
-    stage.appendChild(pointer);
+    var rig = makeDragRig(stage);
 
     var badge = document.createElement('div');
     badge.className = 'demo-badge';
@@ -302,32 +374,26 @@
     }
 
     var dx = function () { return dstEl.offsetLeft - srcEl.offsetLeft; };
-    var placePointer = function () {
-      pointer.style.left = (srcEl.offsetLeft + srcEl.offsetWidth / 2) + 'px';
-      pointer.style.top = (srcEl.offsetTop + srcEl.offsetHeight * 0.72) + 'px';
-    };
 
     var reset = function () {
       srcEl.className = 'block block-' + demo.src.type + ' demo-block demo-src';
-      srcEl.style.transform = '';
-      srcEl.style.removeProperty('--dx');
       dstEl.className = 'block block-' + demo.dst.type + ' demo-block demo-dst';
       if (!forbidden) setBits(dstEl, beforeStr, null);
       badge.className = 'demo-badge';
       badge.textContent = '';
-      pointer.className = 'demo-pointer';
-      pointer.style.transform = '';
-      placePointer();
+      rig.reset();
+      rig.anchor(srcEl, demo.src);
     };
 
     if (reduced) {
       reset();
       if (!forbidden) {
         setBits(dstEl, afterStr, changed);
-        srcEl.classList.add('demo-consumed');
+        srcEl.classList.add('demo-gone');
         badge.textContent = defeated ? '撃破！' : unchanged ? '変化なし' : beforeStr + ' → ' + afterStr;
         badge.classList.add('show', defeated ? 'ok' : unchanged ? 'warn' : 'ok');
       } else {
+        dstEl.classList.add('demo-no');
         badge.textContent = 'このブロックには重ねられない';
         badge.classList.add('show', 'ng');
       }
@@ -338,54 +404,59 @@
       clear();
       reset();
 
-      t(450, function () {
-        pointer.classList.add('show');
-        srcEl.classList.add('demo-grabbed');
+      // つかむ
+      t(350, function () {
+        rig.grab();
+        srcEl.classList.add('demo-dragging');
       });
-      t(800, function () {
-        srcEl.classList.add('demo-move');
-        pointer.classList.add('demo-move');
-        var d = forbidden ? dx() - 18 : dx();
-        srcEl.style.setProperty('--dx', d + 'px');   // 消えるアニメの移動量
-        srcEl.style.transform = 'translateX(' + d + 'px)';
-        pointer.style.transform = 'translateX(' + d + 'px)';
+      // 持ち上げて弧を描いて運ぶ
+      t(700, function () { rig.moveBy(dx() * 0.5, -18); });
+      // 対象の少し上でホバーさせる。真上に重ねると対象が完全に隠れてしまうため
+      t(1050, function () {
+        rig.moveBy(forbidden ? dx() - 16 : dx() - 10, -12);
+        dstEl.classList.add(forbidden ? 'demo-no' : 'demo-target-ok');
       });
 
       if (forbidden) {
-        t(1500, function () {
-          srcEl.classList.add('demo-reject');
-          srcEl.style.transform = 'translateX(0px)';
-          pointer.style.transform = 'translateX(0px)';
-          dstEl.classList.add('demo-no');
+        // 受け付けないので、つかんだまま元の位置へ戻る
+        t(1550, function () {
+          rig.moveBy(0, 0);
           badge.textContent = 'このブロックには重ねられない';
           badge.classList.add('show', 'ng');
         });
-        t(2000, function () { pointer.classList.remove('show'); });
-        t(3100, loop);
+        t(2050, function () {
+          rig.hide();
+          srcEl.classList.remove('demo-dragging');
+        });
+        t(3300, loop);
         return;
       }
 
+      // 落として演算
       t(1450, function () {
+        rig.drop();
+        srcEl.classList.remove('demo-dragging');
         srcEl.classList.add('demo-consumed');
-        pointer.classList.remove('show');
+        dstEl.classList.remove('demo-target-ok');
         setBits(dstEl, afterStr, changed);
         dstEl.classList.add('demo-hit');
       });
-      t(2050, function () {
+      t(1620, rig.hide);
+      t(2000, function () {
         if (defeated) dstEl.classList.add('demo-vanish');
         badge.textContent = defeated ? '撃破！'
           : unchanged ? '変化なし — ブロックだけ失った'
           : beforeStr + ' → ' + afterStr;
         badge.classList.add('show', defeated ? 'ok' : unchanged ? 'warn' : 'ok');
       });
-      t(3250, loop);
+      t(3300, loop);
     };
 
     return { play: loop, stop: clear };
   }
 
   /* ---------------- モーダル制御 ---------------- */
-  var state = { key: null, step: 0, demo: null, onClose: null };
+  var state = { key: null, step: 0, demo: null, queue: [], onClose: null };
   var $ = function (id) { return document.getElementById(id); };
   var reducedMotion = typeof matchMedia === 'function' &&
     matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -410,8 +481,8 @@
 
     $('btn-tut-prev').disabled = state.step === 0;
     var last = state.step === tut.steps.length - 1;
-    $('btn-tut-next').textContent = last ? 'はじめる' : '次へ';
-    $('btn-tut-skip').style.visibility = last ? 'hidden' : '';
+    $('btn-tut-next').textContent = last ? (state.queue.length ? '次へ' : 'はじめる') : '次へ';
+    $('btn-tut-skip').style.visibility = (last && !state.queue.length) ? 'hidden' : '';
 
     if (state.demo) state.demo.stop();
     state.demo = buildDemo($('tut-demo'), step.demo, reducedMotion);
@@ -419,9 +490,12 @@
     requestAnimationFrame(function () { if (state.demo) state.demo.play(); });
   }
 
-  function open(key, onClose) {
-    if (!TUTORIALS[key]) return false;
-    state.key = key;
+  // keys: 単一キーでも配列でもよい。順番に表示する。
+  function open(keys, onClose) {
+    var list = (Array.isArray(keys) ? keys : [keys]).filter(function (k) { return TUTORIALS[k]; });
+    if (!list.length) return false;
+    state.key = list[0];
+    state.queue = list.slice(1);
     state.step = 0;
     state.onClose = onClose || null;
     $('tutorial-modal').hidden = false;
@@ -431,6 +505,7 @@
 
   function close() {
     if (state.demo) { state.demo.stop(); state.demo = null; }
+    state.queue = [];
     $('tutorial-modal').hidden = true;
     var cb = state.onClose;
     state.onClose = null;
@@ -439,18 +514,54 @@
 
   function next() {
     var tut = TUTORIALS[state.key];
-    if (state.step < tut.steps.length - 1) { state.step++; renderStep(); }
-    else close();
+    if (state.step < tut.steps.length - 1) { state.step++; renderStep(); return; }
+    if (state.queue.length) {          // 次のチュートリアルへ
+      state.key = state.queue.shift();
+      state.step = 0;
+      renderStep();
+      return;
+    }
+    close();
   }
 
   function prev() {
     if (state.step > 0) { state.step--; renderStep(); }
   }
 
+  // スキップは今のチュートリアルだけを飛ばす（続きがあれば次へ）
+  function skip() {
+    if (state.queue.length) {
+      state.key = state.queue.shift();
+      state.step = 0;
+      renderStep();
+    } else close();
+  }
+
+  /* 「あそびかた」メニューの中身を作る */
+  function buildMenu(host, onPick) {
+    host.innerHTML = '';
+    MENU_ORDER.forEach(function (key) {
+      var tut = TUTORIALS[key];
+      if (!tut || !tut.menu) return;
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'help-item';
+      b.dataset.tut = key;
+      var icon = key === 'INTRO'
+        ? '<span class="help-icon">' + tut.menu.icon + '</span>'
+        : '<span class="chip chip-' + key.toLowerCase() + '">' + key + '</span>';
+      b.innerHTML = icon +
+        '<span class="help-body"><span class="help-name">' + tut.menu.name + '</span>' +
+        '<span class="help-desc">' + tut.menu.desc + '</span></span>';
+      b.addEventListener('click', function () { onPick(key); });
+      host.appendChild(b);
+    });
+  }
+
   function init() {
     $('btn-tut-next').addEventListener('click', next);
     $('btn-tut-prev').addEventListener('click', prev);
-    $('btn-tut-skip').addEventListener('click', close);
+    $('btn-tut-skip').addEventListener('click', skip);
     document.addEventListener('keydown', function (ev) {
       if ($('tutorial-modal').hidden) return;
       if (ev.key === 'ArrowRight' || ev.key === 'Enter') { ev.preventDefault(); next(); }
@@ -461,7 +572,9 @@
 
   return {
     TUTORIALS: TUTORIALS,
+    MENU_ORDER: MENU_ORDER,
     keyForStage: keyForStage,
+    buildMenu: buildMenu,
     init: init,
     open: open,
     close: close,
