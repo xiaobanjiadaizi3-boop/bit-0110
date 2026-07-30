@@ -22,7 +22,7 @@
 <main class="layout">
 
   <section class="stage-head">
-    <div class="stage-no">STAGE <span id="stage-no">1</span> / 10</div>
+    <div class="stage-no">STAGE <span id="stage-no">1</span> / <span id="stage-total">-</span><span id="world-name" class="world-name"></span></div>
     <h2 id="stage-name" class="stage-name">はじめてのOR</h2>
     <p id="stage-tip" class="stage-tip"></p>
   </section>
@@ -69,7 +69,7 @@
 
 <!-- ステージ選択 -->
 <div id="stage-modal" class="modal" hidden>
-  <div class="modal-card">
+  <div class="modal-card modal-card-stages">
     <h3 class="modal-title">ステージ選択</h3>
     <div id="stage-list" class="stage-list"></div>
     <div class="modal-actions">

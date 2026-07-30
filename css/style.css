@@ -326,20 +326,47 @@ code {
 }
 .clear-text { margin: 10px 0 0; font-size: 14px; color: var(--muted); }
 
+.world-name {
+  margin-left: 10px;
+  color: var(--accent);
+}
+
+.modal-card-stages { max-width: 560px; }
+
 .stage-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 60dvh;
+  overflow-y: auto;
+  text-align: left;
+  padding-right: 4px;
+}
+.world-head {
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  letter-spacing: .08em;
+  color: var(--accent);
+  margin: 10px 0 4px;
+  position: sticky;
+  top: 0;
+  background: var(--bg-soft);
+  padding: 4px 0;
+}
+.world-grid {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 8px;
+  grid-template-columns: repeat(10, 1fr);
+  gap: 5px;
 }
 .stage-btn {
   appearance: none;
   border: 1px solid var(--line);
   background: #1c2331;
   color: var(--text);
-  border-radius: 9px;
-  padding: 12px 0;
+  border-radius: 7px;
+  padding: 8px 0;
   font-family: ui-monospace, monospace;
-  font-size: 15px;
+  font-size: 12px;
   cursor: pointer;
   position: relative;
 }
@@ -390,6 +417,7 @@ code {
   :root { --cell: 43px; --gap: 5px; }
   .bit { width: 8px; height: 12px; font-size: 9px; line-height: 12px; }
   .controls .btn { padding: 8px 12px; font-size: 13px; }
+  .world-grid { grid-template-columns: repeat(8, 1fr); }
 }
 
 @media (prefers-reduced-motion: reduce) {

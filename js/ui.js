@@ -6,7 +6,8 @@
 
   var Core = window.BitCore;
   var LEVELS = window.BitLevels;
-  var STORE_KEY = 'bit0110.progress';
+  var WORLDS = LEVELS.worlds || [{ tag: '', name: '', start: 0, count: LEVELS.length }];
+  var STORE_KEY = 'bit0110.progress.v2';
   var ANIM_MS = 260;
 
   var G = {
@@ -212,7 +213,7 @@
       : G.moves + '手でクリア（最短は' + G.level.par + '手）';
     $('btn-next').style.display = G.index < LEVELS.length - 1 ? '' : 'none';
     if (G.index === LEVELS.length - 1) {
-      $('clear-text').textContent += ' — 全10ステージ制覇！';
+      $('clear-text').textContent += ' — 全' + LEVELS.length + 'ステージ制覇！';
     }
     setTimeout(function () { $('clear-modal').hidden = false; }, 260);
   }
@@ -388,8 +389,10 @@
     G.hint = null;
     G.busy = false;
     $('stage-no').textContent = i + 1;
+    $('stage-total').textContent = LEVELS.length;
+    $('world-name').textContent = (WORLDS[G.level.world] || WORLDS[0]).name;
     $('stage-name').textContent = G.level.name;
-    $('stage-tip').textContent = G.level.tip;
+    $('stage-tip').textContent = G.level.tip || '';
     $('stuck').hidden = true;
     $('clear-modal').hidden = true;
     setPreview('');
@@ -439,25 +442,46 @@
     loadLevel(G.index);
   });
 
-  /* ステージ選択 */
+  /* ステージ選択（ワールドごとにまとめて表示） */
   function renderStageList() {
     var list = $('stage-list');
     list.innerHTML = '';
-    LEVELS.forEach(function (lv, i) {
-      var b = document.createElement('button');
-      b.type = 'button';
-      b.className = 'stage-btn' +
-        (progress.cleared.indexOf(i) !== -1 ? ' cleared' : '') +
-        (i === G.index ? ' current' : '');
-      b.textContent = i + 1;
-      b.disabled = !isUnlocked(i);
-      b.title = isUnlocked(i) ? lv.name : 'まだ開放されていない';
-      b.addEventListener('click', function () {
-        $('stage-modal').hidden = true;
-        loadLevel(i);
-      });
-      list.appendChild(b);
+    WORLDS.forEach(function (wd) {
+      var clearedInWorld = 0;
+      for (var j = wd.start; j < wd.start + wd.count; j++) {
+        if (progress.cleared.indexOf(j) !== -1) clearedInWorld++;
+      }
+      var head = document.createElement('div');
+      head.className = 'world-head';
+      head.textContent = wd.name + '（' + clearedInWorld + '/' + wd.count + '）';
+      list.appendChild(head);
+
+      var grid = document.createElement('div');
+      grid.className = 'world-grid';
+      for (var i = wd.start; i < wd.start + wd.count; i++) {
+        (function (i) {
+          var b = document.createElement('button');
+          b.type = 'button';
+          b.className = 'stage-btn' +
+            (progress.cleared.indexOf(i) !== -1 ? ' cleared' : '') +
+            (i === G.index ? ' current' : '');
+          b.textContent = i + 1;
+          b.disabled = !isUnlocked(i);
+          b.title = isUnlocked(i) ? LEVELS[i].name : 'まだ開放されていない';
+          b.addEventListener('click', function () {
+            $('stage-modal').hidden = true;
+            loadLevel(i);
+          });
+          grid.appendChild(b);
+        })(i);
+      }
+      list.appendChild(grid);
     });
+    // 現在のステージが見える位置までスクロール
+    setTimeout(function () {
+      var cur = list.querySelector('.stage-btn.current');
+      if (cur) cur.scrollIntoView({ block: 'center' });
+    }, 0);
   }
 
   $('btn-stages').addEventListener('click', function () {
