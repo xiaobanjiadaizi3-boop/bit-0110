@@ -4,6 +4,7 @@
   "description": "0と1の4桁bitを操作して悪ブロックを消すパズルゲーム",
   "private": true,
   "scripts": {
+    "gen": "node scripts/generate-levels.js",
     "test": "node test/verify.js",
     "test:browser": "node test/browser.js",
     "start": "npx http-server . -p 8080"

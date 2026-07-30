@@ -84,11 +84,8 @@ function makeSolver(allowOpop) {
   };
 }
 
-function analyze(node, maxStates) {
-  const solve = makeSolver(true);
-  const par = solve(node);
-  if (par === null) return null;
-
+/* 詰み率の計測（solve は par 計算で使ったソルバーを渡して memo を共有する） */
+function deadRatioOf(node, solve, maxStates) {
   const seen = new Set();
   const stack = [node];
   let total = 0, dead = 0;
@@ -97,16 +94,12 @@ function analyze(node, maxStates) {
     const k = key(n);
     if (seen.has(k)) continue;
     seen.add(k);
-    if (seen.size > maxStates) return { par, tooBig: true };
+    if (seen.size > maxStates) return null;
     total++;
     if (solve(n) === null) { dead++; continue; }   // 詰みの先は数えない
     for (const s of successors(n)) if (!seen.has(key(s.node))) stack.push(s.node);
   }
-
-  let good1 = 0, bad1 = 0;
-  for (const s of successors(node)) (solve(s.node) === null ? bad1++ : good1++);
-  const needsOpop = makeSolver(false)(node) === null;
-  return { par, total, dead, deadRatio: dead / total, good1, bad1, needsOpop };
+  return { total, dead, ratio: dead / total };
 }
 
 /* ---------------- ワールド定義 ----------------
@@ -163,7 +156,8 @@ const WORLDS = [
     { n: 10, b: 4, o: 6, par: [6, 6], dead: [0.75, 0.9], mustHave: ['xor'], opop: true, needKind: 'xor' },
     { n: 10, b: 4, o: 7, par: [6, 7], dead: [0.78, 0.92], mustHave: ['xor', 'not'], opop: true },
     { n: 10, b: 4, o: 7, par: [6, 7], dead: [0.8, 0.93], mustHave: ['xor'], opop: true },
-    { n: 10, b: 4, o: 7, par: [7, 7], dead: [0.8, 0.95], mustHave: ['xor', 'xor'], opop: true }
+    { n: 7, b: 4, o: 7, par: [6, 7], dead: [0.8, 0.95], mustHave: ['xor', 'xor'], opop: true },
+    { n: 3, b: 4, o: 7, par: [7, 7], dead: [0.75, 0.96], mustHave: ['xor', 'not'], opop: true }
   ] }
 ];
 
@@ -218,24 +212,36 @@ function findStage(globalIdx, spec, kinds, usedKeys) {
     const k = key(node);
     if (usedKeys.has(k)) continue;
 
-    const a = analyze(node, 60000);
-    if (!a || a.tooBig) continue;
-
+    // 安い順に判定して高い探索（詰み率計測）を最後に回す
+    const solve = makeSolver(true);
+    const par = solve(node);
+    if (par === null) continue;
     const parLo = relax >= 4 ? Math.max(1, spec.par[0] - Math.floor((relax - 2) / 2)) : spec.par[0];
-    if (a.par < parLo || a.par > spec.par[1]) continue;
+    if (par < parLo || par > spec.par[1]) continue;
 
-    const dLo = Math.max(0, spec.dead[0] - 0.04 * relax);
-    const dHi = Math.min(1, spec.dead[1] + 0.04 * relax);
-    if (a.deadRatio < dLo || a.deadRatio > dHi) continue;
-
-    if (spec.opop === true && !a.needsOpop && relax < 5) continue;
+    let needsOpop = null;
+    if (spec.opop === true && relax < 5) {
+      needsOpop = makeSolver(false)(node) === null;
+      if (!needsOpop) continue;
+    }
     if (spec.needKind && relax < 6) {
       const strippedOps = node.ops.filter((o) => parseOp(o).type !== spec.needKind);
       if (makeSolver(true)({ bads: node.bads.slice(), ops: strippedOps }) !== null) continue;
     }
 
+    const st = deadRatioOf(node, solve, 60000);
+    if (!st) continue;
+    const dLo = Math.max(0, spec.dead[0] - 0.04 * relax);
+    const dHi = Math.min(1, spec.dead[1] + 0.04 * relax);
+    if (st.ratio < dLo || st.ratio > dHi) continue;
+
+    if (needsOpop === null) needsOpop = makeSolver(false)(node) === null;
     usedKeys.add(k);
-    return { node, a, attempts: attempt, relax, rng };
+    return {
+      node,
+      a: { par, total: st.total, dead: st.dead, deadRatio: st.ratio, needsOpop },
+      attempts: attempt, relax, rng
+    };
   }
   throw new Error('stage ' + (globalIdx + 1) + ': 条件を満たす盤面が見つからない');
 }
