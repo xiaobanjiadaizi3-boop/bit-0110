@@ -47,23 +47,31 @@
     <button id="btn-hint" class="btn" type="button">ヒント</button>
   </section>
 
-  <div id="stuck" class="stuck" hidden>
-    <b>詰みです。</b>この盤面ではもう全部は倒せません。
-    <button id="btn-stuck-undo" class="btn btn-small" type="button">1手もどす</button>
-    <button id="btn-stuck-reset" class="btn btn-small" type="button">やりなおし</button>
-  </div>
-
 </main>
 
 <!-- クリア -->
 <div id="clear-modal" class="modal" hidden>
   <div class="modal-card">
     <div class="clear-mark">CLEAR</div>
+    <div id="clear-star" class="clear-star"></div>
     <p id="clear-text" class="clear-text"></p>
     <div class="modal-actions">
       <button id="btn-replay" class="btn" type="button">もう一度</button>
       <button id="btn-next" class="btn btn-primary" type="button">次のステージ</button>
     </div>
+  </div>
+</div>
+
+<!-- ゲームオーバー（詰み） -->
+<div id="over-modal" class="modal" hidden>
+  <div class="modal-card">
+    <div class="over-mark">GAME OVER</div>
+    <p class="over-text">詰みです。<br>この盤面では、もう悪ブロックを全部は倒せません。</p>
+    <div class="modal-actions over-actions">
+      <button id="btn-over-stages" class="btn" type="button">ステージ選択</button>
+      <button id="btn-over-retry" class="btn btn-primary" type="button">やりなおす</button>
+    </div>
+    <button id="btn-over-undo" class="btn btn-small over-undo" type="button">1手もどす</button>
   </div>
 </div>
 
@@ -86,6 +94,10 @@
     <h3 id="tut-title" class="tut-title"></h3>
     <div id="tut-demo" class="tut-demo"></div>
     <p id="tut-text" class="tut-text"></p>
+    <div class="tut-loopbar">
+      <div id="tut-loop" class="tut-loop"><div id="tut-loop-fill" class="tut-loop-fill"></div></div>
+      <button id="btn-tut-replay" class="tut-replay" type="button" title="もう一度再生">↻</button>
+    </div>
     <div id="tut-dots" class="tut-dots"></div>
     <div class="modal-actions">
       <button id="btn-tut-skip" class="btn btn-small" type="button">スキップ</button>

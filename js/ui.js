@@ -34,10 +34,11 @@
       var p = raw ? JSON.parse(raw) : null;
       if (p && Array.isArray(p.cleared)) {
         if (!Array.isArray(p.seenTutorials)) p.seenTutorials = [];
+        if (!p.best || typeof p.best !== 'object') p.best = {};
         return p;
       }
     } catch (e) { /* localStorageが使えない環境でも遊べるようにする */ }
-    return { cleared: [], last: 0, seenTutorials: [] };
+    return { cleared: [], last: 0, seenTutorials: [], best: {} };
   }
 
   function saveProgress(p) {
@@ -198,22 +199,28 @@
   }
 
   function checkStatus() {
-    $('stuck').hidden = true;
+    $('over-modal').hidden = true;
     if (Core.isCleared(G.state)) return onClear();
     if (Core.solve(G.state) === null) {
-      $('stuck').hidden = false;
       setPreview('');
+      $('btn-over-undo').disabled = G.history.length === 0;
+      setTimeout(function () { $('over-modal').hidden = false; }, 280);
     }
   }
 
   function onClear() {
     if (progress.cleared.indexOf(G.index) === -1) progress.cleared.push(G.index);
+    var prevBest = progress.best[G.index];
+    if (prevBest === undefined || G.moves < prevBest) progress.best[G.index] = G.moves;
     progress.last = Math.min(G.index + 1, LEVELS.length - 1);
     saveProgress(progress);
 
-    var perfect = G.moves === G.level.par;
+    var perfect = G.moves <= G.level.par;
+    var star = $('clear-star');
+    star.textContent = '★';
+    star.className = 'clear-star ' + (perfect ? 'gold' : 'blue');
     $('clear-text').textContent = perfect
-      ? G.moves + '手（最短）でクリア！'
+      ? G.moves + '手（最短）でクリア！ 金の星を獲得'
       : G.moves + '手でクリア（最短は' + G.level.par + '手）';
     $('btn-next').style.display = G.index < LEVELS.length - 1 ? '' : 'none';
     if (G.index === LEVELS.length - 1) {
@@ -397,7 +404,7 @@
     $('world-name').textContent = (WORLDS[G.level.world] || WORLDS[0]).name;
     $('stage-name').textContent = G.level.name;
     $('stage-tip').textContent = G.level.tip || '';
-    $('stuck').hidden = true;
+    $('over-modal').hidden = true;
     $('clear-modal').hidden = true;
     setPreview('');
     render();
@@ -424,16 +431,31 @@
     G.moves = Math.max(0, G.moves - 1);
     G.selected = null;
     G.hint = null;
-    $('stuck').hidden = true;
+    $('over-modal').hidden = true;
     setPreview('');
     render();
     checkStatus();
   }
 
   $('btn-undo').addEventListener('click', undo);
-  $('btn-stuck-undo').addEventListener('click', undo);
   $('btn-reset').addEventListener('click', function () { loadLevel(G.index); });
-  $('btn-stuck-reset').addEventListener('click', function () { loadLevel(G.index); });
+  $('btn-over-undo').addEventListener('click', undo);
+  $('btn-over-retry').addEventListener('click', function () { loadLevel(G.index); });
+  $('btn-over-stages').addEventListener('click', function () {
+    $('over-modal').hidden = true;
+    renderStageList();
+    $('stage-modal').hidden = false;
+  });
+
+  // 詰んだ盤面のまま放置されないよう、ステージ選択を閉じたら詰み画面に戻す
+  function isStuckNow() {
+    return G.state && !Core.isCleared(G.state) && Core.solve(G.state) === null;
+  }
+
+  function closeStageModal() {
+    $('stage-modal').hidden = true;
+    if (isStuckNow()) $('over-modal').hidden = false;
+  }
 
   $('btn-hint').addEventListener('click', function () {
     if (G.busy) return;
@@ -458,6 +480,13 @@
     $('clear-modal').hidden = true;
     loadLevel(G.index);
   });
+
+  /* クリア状況に応じた星。最短手数なら金、それ以外のクリアは青。 */
+  function starFor(i) {
+    if (progress.cleared.indexOf(i) === -1) return null;
+    var best = progress.best[i];
+    return (best !== undefined && best <= LEVELS[i].par) ? 'gold' : 'blue';
+  }
 
   /* ステージ選択（ワールドごとにまとめて表示） */
   function renderStageList() {
@@ -484,7 +513,15 @@
             (i === G.index ? ' current' : '');
           b.textContent = i + 1;
           b.disabled = !isUnlocked(i);
-          b.title = isUnlocked(i) ? LEVELS[i].name : 'まだ開放されていない';
+          var star = starFor(i);
+          if (star) {
+            var sp = document.createElement('span');
+            sp.className = 'stage-star ' + star;
+            sp.textContent = '★';
+            b.appendChild(sp);
+          }
+          b.title = !isUnlocked(i) ? 'まだ開放されていない'
+            : LEVELS[i].name + (star === 'gold' ? '（最短クリア）' : star ? '（クリア済み）' : '');
           b.addEventListener('click', function () {
             $('stage-modal').hidden = true;
             loadLevel(i);
@@ -505,7 +542,7 @@
     renderStageList();
     $('stage-modal').hidden = false;
   });
-  $('btn-stage-close').addEventListener('click', function () { $('stage-modal').hidden = true; });
+  $('btn-stage-close').addEventListener('click', closeStageModal);
   // 「あそびかた」= チュートリアル一覧。ここからいつでも見返せる。
   Tutorial.buildMenu($('help-list'), function (key) {
     $('help-modal').hidden = true;
@@ -515,16 +552,17 @@
   $('btn-help-close').addEventListener('click', function () { $('help-modal').hidden = true; });
 
   // モーダルの外側をクリックで閉じる（クリア画面は誤操作防止のため除く）
-  ['stage-modal', 'help-modal'].forEach(function (id) {
-    $(id).addEventListener('click', function (ev) {
-      if (ev.target === this) this.hidden = true;
-    });
+  $('help-modal').addEventListener('click', function (ev) {
+    if (ev.target === this) this.hidden = true;
+  });
+  $('stage-modal').addEventListener('click', function (ev) {
+    if (ev.target === this) closeStageModal();
   });
 
   document.addEventListener('keydown', function (ev) {
     if (Tutorial && Tutorial.isOpen()) return;   // チュートリアル中はゲーム側のキー操作を止める
     if (ev.key === 'Escape') {
-      $('stage-modal').hidden = true;
+      if (!$('stage-modal').hidden) closeStageModal();
       $('help-modal').hidden = true;
       clearSelection();
     } else if (ev.key === 'z' && (ev.ctrlKey || ev.metaKey)) {

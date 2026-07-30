@@ -79,11 +79,15 @@ async function closeTutorial(page) {
   throw new Error('チュートリアルが閉じられない');
 }
 
+async function closeOver(page) {
+  if (await page.locator('#over-modal').isVisible()) await page.click('#btn-over-retry');
+}
+
 const nextHint = (page) => page.evaluate(() => window.BitCore.hint(window.BitGame.state));
 const snapshot = (page) => page.evaluate(() => ({
   moves: window.BitGame.moves,
   blocks: window.BitGame.state.blocks.length,
-  stuck: !document.getElementById('stuck').hidden,
+  over: !document.getElementById('over-modal').hidden,
   cleared: window.BitCore.isCleared(window.BitGame.state)
 }));
 
@@ -177,7 +181,7 @@ const snapshot = (page) => page.evaluate(() => ({
     ok(after.moves === before.moves, '移動は手数に数えない');
   }
 
-  console.log('\n=== 詰み検出・もどす・やりなおし ===');
+  console.log('\n=== ゲームオーバー（詰み） ===');
   {
     // 初手で詰む手があるステージを探して、その手を実際に打つ
     const trap = await page.evaluate(() => {
@@ -198,25 +202,42 @@ const snapshot = (page) => page.evaluate(() => ({
     await page.evaluate(n => window.BitGame.loadLevel(n), trap.level);
     const initBlocks = (await snapshot(page)).blocks;
 
-    await tap(page, trap.srcId);
-    await tap(page, trap.dstId);
-    await settled(page);
-    await page.waitForTimeout(80);
+    const fallIn = async () => {
+      await tap(page, trap.srcId);
+      await tap(page, trap.dstId);
+      await settled(page);
+      await page.waitForSelector('#over-modal:not([hidden])', { timeout: 3000 }).catch(() => {});
+    };
+
+    await fallIn();
     let s = await snapshot(page);
-    ok(s.stuck, '詰み盤面で「詰み」が表示される');
+    ok(s.over, '詰むとゲームオーバー画面が出る');
+    ok((await page.textContent('.over-mark')).trim() === 'GAME OVER', '「GAME OVER」と表示される');
+    ok(await page.locator('#btn-over-retry').isVisible() &&
+       await page.locator('#btn-over-stages').isVisible(),
+      'やりなおす／ステージ選択のボタンがある');
 
-    await page.click('#btn-stuck-undo');
-    await page.waitForTimeout(80);
+    await page.click('#btn-over-retry');
+    await page.waitForTimeout(120);
     s = await snapshot(page);
-    ok(!s.stuck && s.moves === 0 && s.blocks === initBlocks, '「もどす」で詰みから復帰できる');
+    ok(!s.over && s.moves === 0 && s.blocks === initBlocks, '「やりなおす」で初期配置に戻る');
 
-    await tap(page, trap.srcId);
-    await tap(page, trap.dstId);
-    await settled(page);
-    await page.click('#btn-stuck-reset');
-    await page.waitForTimeout(80);
+    await fallIn();
+    await page.click('#btn-over-stages');
+    await page.waitForTimeout(120);
+    ok(!(await page.locator('#over-modal').isVisible()) &&
+       await page.locator('#stage-modal').isVisible(),
+      '「ステージ選択」でステージ一覧へ移動できる');
+
+    await page.click('#btn-stage-close');
+    await page.waitForTimeout(120);
+    ok(await page.locator('#over-modal').isVisible(),
+      'ステージを選ばずに閉じると、詰み画面に戻る');
+
+    await page.click('#btn-over-undo');
+    await page.waitForTimeout(120);
     s = await snapshot(page);
-    ok(!s.stuck && s.moves === 0 && s.blocks === initBlocks, '「やりなおし」で初期配置に戻る');
+    ok(!s.over && s.moves === 0 && s.blocks === initBlocks, '「1手もどす」で詰みから復帰できる');
   }
 
   console.log('\n=== ヒント ===');
@@ -394,14 +415,129 @@ const snapshot = (page) => page.evaluate(() => ({
       const src = document.querySelector('#tut-demo .demo-src');
       return {
         srcConsumed: !!src && src.classList.contains('demo-consumed'),
+        srcOpacity: src ? +getComputedStyle(src).opacity : 1,
         dstBits: dst ? [...dst.querySelectorAll('.bit')].map(b => b.textContent).join('') : ''
       };
     });
-    ok(dropped.srcConsumed, '落とすと重ねた側のブロックが消える');
+    ok(dropped.srcConsumed && dropped.srcOpacity < 0.1,
+      '落とすと重ねた側のブロックが消える（不透明度 ' + dropped.srcOpacity.toFixed(2) + '）');
     ok(dropped.dstBits === '1111', '対象のbitが 0101 → 1111 に変わる（実際は ' + dropped.dstBits + '）');
     await closeTutorial(p3);
 
     await ctx3.close();
+  }
+
+  console.log('\n=== チュートリアルのループ再生 ===');
+  {
+    await page.evaluate(() => window.BitTutorial.open('OR'));
+    const cycle = await page.evaluate(() => window.BitTutorial._state.demo.cycle);
+    ok(cycle > 0, 'デモに繰り返し周期がある（' + cycle + 'ms）');
+    ok(await page.locator('#tut-loop').isVisible(), '繰り返しの進行バーが出る');
+
+    // 2周期ぶんサンプリングして、同じ演出が繰り返されるか数える
+    const samples = [];
+    for (let i = 0; i < Math.ceil(cycle * 2.2 / 100); i++) {
+      samples.push(await page.evaluate(() =>
+        document.querySelector('#tut-demo .demo-ghost').classList.contains('show') ? 1 : 0));
+      await page.waitForTimeout(100);
+    }
+    let rises = 0;
+    for (let i = 1; i < samples.length; i++) if (samples[i] && !samples[i - 1]) rises++;
+    ok(rises >= 2, '一定時間ごとにアニメーションが繰り返される（' + rises + '回/2周期）');
+
+    // 手動リプレイ
+    await page.click('#btn-tut-replay');
+    await page.waitForTimeout(120);
+    ok(await page.evaluate(() =>
+      !document.querySelector('#tut-demo .demo-ghost').classList.contains('show')),
+      'リプレイボタンで最初から再生し直す');
+    await closeTutorial(page);
+  }
+
+  console.log('\n=== ステージ選択の星 ===');
+  {
+    const ctx4 = await browser.newContext({ viewport: { width: 900, height: 900 } });
+    const p4 = await ctx4.newPage();
+    await p4.goto(base);
+    await closeTutorial(p4);
+
+    // ステージ1を最短でクリア → 金の星
+    await p4.evaluate(() => window.BitGame.loadLevel(0));
+    let h = await p4.evaluate(() => window.BitCore.hint(window.BitGame.state));
+    await p4.click(`#board .block[data-id="${h.srcId}"]`);
+    await p4.click(`#board .block[data-id="${h.dstId}"]`);
+    await p4.waitForSelector('#clear-modal:not([hidden])', { timeout: 3000 });
+    ok(await p4.locator('#clear-star.gold').count() === 1, '最短クリアで金の星が出る');
+    await p4.click('#btn-next');
+
+    // 「1手損しても勝てる」ステージを探して遠回りクリア → 青い星
+    const detour = await p4.evaluate(() => {
+      const C = window.BitCore, L = window.BitLevels;
+      for (let i = 1; i < 40; i++) {
+        const st = C.createState(L[i]);
+        for (const src of st.blocks) for (const dst of st.blocks) {
+          if (!C.canApply(src, dst)) continue;
+          const ns = C.applyBlock(st, src.id, dst.id);
+          // 1手使ったのに残り最短が減っていない = 遠回りだが勝てる
+          if (ns && C.solve(ns) === L[i].par) return { level: i, srcId: src.id, dstId: dst.id };
+        }
+      }
+      return null;
+    });
+    ok(detour !== null, '遠回りしても勝てるステージが見つかる（ステージ' + (detour.level + 1) + '）');
+
+    await p4.evaluate(n => window.BitGame.loadLevel(n), detour.level);
+    await closeTutorial(p4);
+    await p4.click(`#board .block[data-id="${detour.srcId}"]`);
+    await p4.click(`#board .block[data-id="${detour.dstId}"]`);
+    await p4.waitForFunction(() => !window.BitGame.busy, null, { timeout: 8000 });
+    let guard = 0;
+    while (!(await p4.evaluate(() => window.BitCore.isCleared(window.BitGame.state)))) {
+      if (++guard > 16) break;
+      h = await p4.evaluate(() => window.BitCore.hint(window.BitGame.state));
+      if (!h) break;
+      await p4.click(`#board .block[data-id="${h.srcId}"]`);
+      await p4.click(`#board .block[data-id="${h.dstId}"]`);
+      await p4.waitForFunction(() => !window.BitGame.busy, null, { timeout: 8000 });
+    }
+    await p4.waitForSelector('#clear-modal:not([hidden])', { timeout: 3000 });
+    const detourMoves = await p4.evaluate(() => window.BitGame.moves);
+    const detourPar = await p4.evaluate(n => window.BitLevels[n].par, detour.level);
+    ok(detourMoves === detourPar + 1,
+      '遠回りで ' + detourMoves + '手クリア（最短' + detourPar + '手）');
+    ok(await p4.locator('#clear-star.blue').count() === 1, '最短でないクリアは青い星になる');
+    await p4.click('#btn-replay');
+    await closeOver(p4);
+
+    // ステージ一覧での星の出かた
+    await p4.click('#btn-stages');
+    const stars = await p4.evaluate((d) => {
+      const btns = [...document.querySelectorAll('.stage-btn')];
+      const at = i => {
+        const st = btns[i].querySelector('.stage-star');
+        return st ? st.className.replace('stage-star ', '') : null;
+      };
+      const uncleared = btns.findIndex((b, i) => i !== 0 && i !== d && !b.querySelector('.stage-star'));
+      return {
+        gold: at(0), blue: at(d), none: uncleared, uncle: uncleared >= 0 ? at(uncleared) : 'x',
+        text: btns[0].querySelector('.stage-star').textContent,
+        corner: getComputedStyle(btns[0].querySelector('.stage-star')).position
+      };
+    }, detour.level);
+    ok(stars.gold === 'gold', 'ステージ1（最短クリア）は金の星（' + stars.gold + '）');
+    ok(stars.blue === 'blue',
+      'ステージ' + (detour.level + 1) + '（遠回りクリア）は青い星（' + stars.blue + '）');
+    ok(stars.uncle === null, '未クリアのステージには星がつかない');
+    ok(stars.text === '★' && stars.corner === 'absolute', '星は★でボタンの角に重ねて表示される');
+    await p4.click('#btn-stage-close');
+
+    // 星はリロードしても残る
+    await p4.reload();
+    await closeTutorial(p4);
+    await p4.click('#btn-stages');
+    const goldAfter = await p4.locator('.stage-btn .stage-star.gold').count();
+    ok(goldAfter >= 1, 'リロードしても星が残る（金 ' + goldAfter + ' 個）');
+    await ctx4.close();
   }
 
   console.log('\n=== 進行状況の保存 ===');

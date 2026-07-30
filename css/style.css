@@ -269,20 +269,36 @@ code {
   font-weight: 700;
 }
 
-/* ---------- 詰み ---------- */
-.stuck {
-  margin: 0 auto;
-  max-width: 34em;
-  text-align: center;
-  font-size: 13px;
-  line-height: 1.9;
-  color: #ffd66b;
-  background: #2a1f0b;
-  border: 1px solid #6b5320;
-  border-radius: 10px;
-  padding: 10px 12px;
+/* ---------- ゲームオーバー ---------- */
+.over-mark {
+  font-family: ui-monospace, monospace;
+  font-size: 25px;
+  font-weight: 700;
+  letter-spacing: .16em;
+  color: #ff6b7a;
+  text-shadow: 0 0 18px #ff4d5e4d;
+  animation: overIn .45s cubic-bezier(.2, 1.5, .4, 1);
 }
-.stuck .btn { margin-left: 6px; }
+.over-text {
+  margin: 12px 0 0;
+  font-size: 13px;
+  line-height: 1.85;
+  color: var(--muted);
+}
+.over-actions { margin-top: 20px; }
+.over-undo {
+  margin-top: 12px;
+  background: transparent;
+  border-color: transparent;
+  color: var(--muted);
+  text-decoration: underline;
+}
+.over-undo:hover:not(:disabled) { color: var(--text); border-color: transparent; }
+
+@keyframes overIn {
+  from { transform: scale(.7); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
 
 /* ---------- モーダル ---------- */
 .modal {
@@ -371,8 +387,34 @@ code {
   position: relative;
 }
 .stage-btn:disabled { opacity: .35; cursor: default; }
-.stage-btn.cleared { border-color: var(--accent); color: var(--accent); }
-.stage-btn.current { background: #263247; }
+.stage-btn.cleared { background: #202a3a; }
+.stage-btn.current { background: #2d3b54; border-color: #4d5f7c; }
+
+/* クリア状況の星。青=クリア、金=最短手数でクリア */
+.stage-star {
+  position: absolute;
+  top: 1px;
+  right: 3px;
+  font-size: 9px;
+  line-height: 1;
+  pointer-events: none;
+}
+.stage-star.blue { color: #5ab0ff; text-shadow: 0 0 4px #5ab0ff70; }
+.stage-star.gold { color: #ffcf4d; text-shadow: 0 0 5px #ffcf4d90; }
+
+.clear-star {
+  font-size: 30px;
+  line-height: 1.2;
+  margin-top: 4px;
+  animation: starPop .5s cubic-bezier(.2, 1.6, .4, 1);
+}
+.clear-star.blue { color: #5ab0ff; text-shadow: 0 0 14px #5ab0ff70; }
+.clear-star.gold { color: #ffcf4d; text-shadow: 0 0 16px #ffcf4d99; }
+
+@keyframes starPop {
+  from { transform: scale(.2) rotate(-40deg); opacity: 0; }
+  to { transform: scale(1) rotate(0); opacity: 1; }
+}
 
 /* ---------- あそびかたメニュー ---------- */
 .chip {
@@ -444,6 +486,48 @@ code {
   min-height: 3.6em;
 }
 
+.tut-loopbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+.tut-loop {
+  flex: 1;
+  height: 3px;
+  border-radius: 2px;
+  background: #253045;
+  overflow: hidden;
+}
+.tut-loop[hidden] { display: none; }
+.tut-loop-fill {
+  height: 100%;
+  background: var(--accent);
+  opacity: .65;
+  transform-origin: left center;
+  transform: scaleX(0);
+}
+@keyframes loopBar {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+.tut-replay {
+  appearance: none;
+  border: 1px solid var(--line);
+  background: var(--bg-soft);
+  color: var(--muted);
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  flex: none;
+}
+.tut-replay:hover { color: var(--text); border-color: #48566b; }
+
+.tut-demo { cursor: pointer; }
+
 .tut-dots {
   display: flex;
   justify-content: center;
@@ -460,6 +544,19 @@ code {
 .tut-dot.active { background: var(--accent); transform: scale(1.25); }
 
 /* --- デモの舞台 --- */
+.demo-stage > .demo-block,
+.demo-stage > .demo-goal-item,
+.demo-stage > .demo-cell {
+  animation: demoIn .34s cubic-bezier(.2, 1.4, .4, 1) backwards;
+}
+.demo-stage > *:nth-child(2) { animation-delay: .06s; }
+.demo-stage > *:nth-child(3) { animation-delay: .12s; }
+
+@keyframes demoIn {
+  from { transform: translateY(8px) scale(.85); opacity: 0; }
+  to { transform: translateY(0) scale(1); opacity: 1; }
+}
+
 .demo-stage {
   position: relative;
   display: flex;
@@ -491,9 +588,13 @@ code {
   transform: translate(-50%, -50%);
 }
 
+/* 登場アニメ(.demo-stage > .demo-block)より詳細度を上げないと上書きされる */
+.demo-stage > .demo-block.demo-consumed,
 .demo-consumed { animation: demoConsume .3s ease forwards; }
 .demo-gone { opacity: 0; }
+.demo-stage > .demo-block.demo-hit,
 .demo-hit { animation: hit .34s ease; }
+.demo-stage > .demo-block.demo-vanish,
 .demo-vanish { animation: vanish .45s ease forwards; }
 .demo-dragging { opacity: .28; }
 .demo-target-ok { box-shadow: 0 0 0 3px #ffffff9c; }

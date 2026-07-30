@@ -128,6 +128,9 @@
 
   var MENU_ORDER = ['INTRO', 'OR', 'NOT', 'AND', 'XOR'];
 
+  // すべてのデモはこの周期でぴったり繰り返す（見せ終わってから少し余韻を置く）
+  var CYCLE = 3600;
+
   /* ステージ番号 → そこで出すチュートリアルのキー配列 */
   function keyForStage(levels, worlds, index) {
     for (var i = 0; i < worlds.length; i++) {
@@ -223,6 +226,7 @@
   // 各デモは {play, stop} を返す。play はループする。
   function buildDemo(host, demo, reduced) {
     host.innerHTML = '';
+    var noop = function () {};
     var timers = [];
     var t = function (ms, fn) { timers.push(setTimeout(fn, ms)); };
     var clear = function () { timers.forEach(clearTimeout); timers = []; };
@@ -241,7 +245,7 @@
       legend.innerHTML = '<span><i class="swatch swatch-1"></i>1</span><span><i class="swatch swatch-0"></i>0</span>';
       host.appendChild(legend);
       var cells = blk.querySelectorAll('.bit');
-      if (reduced) return { play: function () {}, stop: clear };
+      if (reduced) return { play: noop, stop: clear, restart: noop, cycle: 0 };
       var bitLoop = function () {
         clear();
         for (var i = 0; i < cells.length; i++) {
@@ -253,10 +257,10 @@
         }
         t(300 + cells.length * 380 + 500, function () {
           for (var j = 0; j < cells.length; j++) cells[j].classList.remove('bit-focus');
-          t(600, bitLoop);
         });
+        t(CYCLE, bitLoop);
       };
-      return { play: bitLoop, stop: clear };
+      return { play: bitLoop, stop: clear, restart: bitLoop, cycle: CYCLE };
     }
 
     /* --- 撃破条件 --- */
@@ -276,7 +280,7 @@
       });
       if (reduced) {
         made.forEach(function (m) { m.tag.classList.add('show'); });
-        return { play: function () {}, stop: clear };
+        return { play: noop, stop: clear, restart: noop, cycle: 0 };
       }
       var goalLoop = function () {
         clear();
@@ -289,9 +293,9 @@
         t(1500, function () {
           made.forEach(function (m) { m.el.classList.remove('demo-hit'); m.el.classList.add('demo-vanish'); });
         });
-        t(2800, goalLoop);
+        t(CYCLE, goalLoop);
       };
-      return { play: goalLoop, stop: clear };
+      return { play: goalLoop, stop: clear, restart: goalLoop, cycle: CYCLE };
     }
 
     /* --- 空きマスへドラッグして移動 --- */
@@ -315,7 +319,7 @@
       if (reduced) {
         placeMv();
         cellB.classList.add('demo-cell-target');
-        return { play: function () {}, stop: clear };
+        return { play: noop, stop: clear, restart: noop, cycle: 0 };
       }
       var moveLoop = function () {
         clear();
@@ -337,9 +341,9 @@
           cellB.classList.remove('demo-cell-target');
         });
         t(1600, mrig.hide);
-        t(2900, moveLoop);
+        t(CYCLE, moveLoop);
       };
-      return { play: moveLoop, stop: clear };
+      return { play: moveLoop, stop: clear, restart: moveLoop, cycle: CYCLE };
     }
 
     /* --- 重ねる（apply / forbid） --- */
@@ -397,7 +401,7 @@
         badge.textContent = 'このブロックには重ねられない';
         badge.classList.add('show', 'ng');
       }
-      return { play: function () {}, stop: clear };
+      return { play: noop, stop: clear, restart: noop, cycle: 0 };
     }
 
     var loop = function () {
@@ -428,7 +432,7 @@
           rig.hide();
           srcEl.classList.remove('demo-dragging');
         });
-        t(3300, loop);
+        t(CYCLE, loop);
         return;
       }
 
@@ -449,10 +453,10 @@
           : beforeStr + ' → ' + afterStr;
         badge.classList.add('show', defeated ? 'ok' : unchanged ? 'warn' : 'ok');
       });
-      t(3300, loop);
+      t(CYCLE, loop);
     };
 
-    return { play: loop, stop: clear };
+    return { play: loop, stop: clear, restart: loop, cycle: CYCLE };
   }
 
   /* ---------------- モーダル制御 ---------------- */
@@ -487,7 +491,29 @@
     if (state.demo) state.demo.stop();
     state.demo = buildDemo($('tut-demo'), step.demo, reducedMotion);
     // レイアウト確定後に再生（offsetLeft を使うため）
-    requestAnimationFrame(function () { if (state.demo) state.demo.play(); });
+    requestAnimationFrame(function () {
+      if (!state.demo) return;
+      state.demo.play();
+      restartLoopBar(state.demo.cycle);
+    });
+  }
+
+  /* デモの繰り返しに合わせて進むバー。いつ再生し直されるかが分かるようにする。 */
+  function restartLoopBar(cycle) {
+    var fill = $('tut-loop-fill');
+    if (!fill) return;
+    var bar = $('tut-loop');
+    if (!cycle) { bar.hidden = true; return; }
+    bar.hidden = false;
+    fill.style.animation = 'none';
+    void fill.offsetWidth;                       // アニメーションを巻き戻す
+    fill.style.animation = 'loopBar ' + cycle + 'ms linear infinite';
+  }
+
+  function replay() {
+    if (!state.demo || !state.demo.cycle) return;
+    state.demo.restart();
+    restartLoopBar(state.demo.cycle);
   }
 
   // keys: 単一キーでも配列でもよい。順番に表示する。
@@ -562,6 +588,8 @@
     $('btn-tut-next').addEventListener('click', next);
     $('btn-tut-prev').addEventListener('click', prev);
     $('btn-tut-skip').addEventListener('click', skip);
+    $('btn-tut-replay').addEventListener('click', replay);
+    $('tut-demo').addEventListener('click', replay);   // デモをタップしても最初から
     document.addEventListener('keydown', function (ev) {
       if ($('tutorial-modal').hidden) return;
       if (ev.key === 'ArrowRight' || ev.key === 'Enter') { ev.preventDefault(); next(); }
@@ -578,6 +606,8 @@
     init: init,
     open: open,
     close: close,
+    replay: replay,
+    CYCLE: CYCLE,
     isOpen: function () { return !$('tutorial-modal').hidden; },
     _state: state
   };
