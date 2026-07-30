@@ -6,6 +6,7 @@
 
   var Core = window.BitCore;
   var LEVELS = window.BitLevels;
+  var Tutorial = window.BitTutorial;
   var WORLDS = LEVELS.worlds || [{ tag: '', name: '', start: 0, count: LEVELS.length }];
   var STORE_KEY = 'bit0110.progress.v2';
   var ANIM_MS = 260;
@@ -31,9 +32,12 @@
     try {
       var raw = localStorage.getItem(STORE_KEY);
       var p = raw ? JSON.parse(raw) : null;
-      if (p && Array.isArray(p.cleared)) return p;
+      if (p && Array.isArray(p.cleared)) {
+        if (!Array.isArray(p.seenTutorials)) p.seenTutorials = [];
+        return p;
+      }
     } catch (e) { /* localStorageが使えない環境でも遊べるようにする */ }
-    return { cleared: [], last: 0 };
+    return { cleared: [], last: 0, seenTutorials: [] };
   }
 
   function saveProgress(p) {
@@ -399,6 +403,17 @@
     render();
     progress.last = i;
     saveProgress(progress);
+    maybeTutorial(i);
+  }
+
+  /* 新しいブロックが解禁されるステージに来たら、一度だけチュートリアルを出す */
+  function maybeTutorial(i) {
+    if (!Tutorial) return;
+    var key = Tutorial.keyForStage(LEVELS, WORLDS, i);
+    if (!key || progress.seenTutorials.indexOf(key) !== -1) return;
+    progress.seenTutorials.push(key);
+    saveProgress(progress);
+    Tutorial.open(key);
   }
 
   function undo() {
@@ -492,6 +507,14 @@
   $('btn-rules').addEventListener('click', function () { $('rules-modal').hidden = false; });
   $('btn-rules-close').addEventListener('click', function () { $('rules-modal').hidden = true; });
 
+  // ルール画面からチュートリアルを見返す
+  Array.prototype.forEach.call(document.querySelectorAll('[data-tut]'), function (b) {
+    b.addEventListener('click', function () {
+      $('rules-modal').hidden = true;
+      Tutorial.open(b.dataset.tut);
+    });
+  });
+
   // モーダルの外側をクリックで閉じる（クリア画面は誤操作防止のため除く）
   ['stage-modal', 'rules-modal'].forEach(function (id) {
     $(id).addEventListener('click', function (ev) {
@@ -500,6 +523,7 @@
   });
 
   document.addEventListener('keydown', function (ev) {
+    if (Tutorial && Tutorial.isOpen()) return;   // チュートリアル中はゲーム側のキー操作を止める
     if (ev.key === 'Escape') {
       $('stage-modal').hidden = true;
       $('rules-modal').hidden = true;
@@ -517,7 +541,7 @@
   window.BitGame.loadLevel = loadLevel;
 
   /* 起動 */
+  Tutorial.init();
   var startAt = isUnlocked(progress.last) ? progress.last : 0;
-  loadLevel(startAt);
-  if (!progress.cleared.length) $('rules-modal').hidden = false;
+  loadLevel(startAt);   // 新ブロック解禁のステージならチュートリアルが開く
 })();

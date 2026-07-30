@@ -68,9 +68,9 @@ async function dragToCell(page, srcId, cx, cy) {
   await page.mouse.up();
 }
 
-// ルールモーダルは初回起動時だけ出る
-async function closeRules(page) {
-  if (await page.locator('#rules-modal').isVisible()) await page.click('#btn-rules-close');
+// チュートリアルは新ブロック解禁のステージで一度だけ出る
+async function closeTutorial(page) {
+  if (await page.locator('#tutorial-modal').isVisible()) await page.click('#btn-tut-skip');
 }
 
 const nextHint = (page) => page.evaluate(() => window.BitCore.hint(window.BitGame.state));
@@ -89,7 +89,11 @@ const snapshot = (page) => page.evaluate(() => ({
 
   // 全ステージを開放した状態で起動する
   await context.addInitScript(([k]) => {
-    localStorage.setItem(k, JSON.stringify({ cleared: Array.from({ length: 1000 }, (_, i) => i), last: 0 }));
+    localStorage.setItem(k, JSON.stringify({
+      cleared: Array.from({ length: 1000 }, (_, i) => i),
+      last: 0,
+      seenTutorials: ['INTRO', 'NOT', 'AND', 'XOR']
+    }));
   }, [STORE_KEY]);
 
   const page = await context.newPage();
@@ -98,7 +102,7 @@ const snapshot = (page) => page.evaluate(() => ({
   page.on('pageerror', e => errors.push(String(e)));
 
   await page.goto(base);
-  await closeRules(page);
+  await closeTutorial(page);
 
   const meta = await page.evaluate(() => ({
     n: window.BitLevels.length,
@@ -268,12 +272,87 @@ const snapshot = (page) => page.evaluate(() => ({
     await page.click('#btn-stage-close');
   }
 
+  console.log('\n=== チュートリアル ===');
+  {
+    // まっさらな状態で開くと、ルール説明ではなくチュートリアルが出る
+    const ctx3 = await browser.newContext({ viewport: { width: 900, height: 900 } });
+    const p3 = await ctx3.newPage();
+    const tutErrors = [];
+    p3.on('pageerror', e => tutErrors.push(String(e)));
+    p3.on('console', m => { if (m.type() === 'error') tutErrors.push(m.text()); });
+    await p3.goto(base);
+
+    ok(await p3.locator('#tutorial-modal').isVisible(), '初回起動でチュートリアルが出る');
+    ok(!(await p3.locator('#rules-modal').isVisible()), '初回のルール説明モーダルは出ない');
+
+    // ステップを最後まで進められる／デモが描画されている
+    const intro = await p3.evaluate(() => window.BitTutorial.TUTORIALS.INTRO.steps.length);
+    ok(intro >= 4, 'あそびかたは ' + intro + ' ステップある');
+    for (let s = 0; s < intro; s++) {
+      const dots = await p3.locator('.tut-dot.active').count();
+      const demoBlocks = await p3.locator('#tut-demo .demo-block').count();
+      if (dots !== 1 || demoBlocks < 1) {
+        ok(false, `ステップ${s + 1}: アクティブなドット${dots}個 / デモのブロック${demoBlocks}個`);
+        break;
+      }
+      if (s === intro - 1) {
+        ok(await p3.textContent('#btn-tut-next') === 'はじめる', '最後のステップは「はじめる」になる');
+      }
+      await p3.click('#btn-tut-next');
+      await p3.waitForTimeout(60);
+    }
+    ok(!(await p3.locator('#tutorial-modal').isVisible()), '最後まで進めると閉じる');
+
+    // アニメーションが動いてもエラーが出ないことを確認
+    await p3.waitForTimeout(500);
+    ok(tutErrors.length === 0, 'チュートリアル中にエラーが出ない' +
+      (tutErrors.length ? ': ' + tutErrors.join(' | ') : ''));
+
+    // 一度見たら再表示されない
+    await p3.reload();
+    await p3.waitForTimeout(150);
+    ok(!(await p3.locator('#tutorial-modal').isVisible()), '一度見たチュートリアルは再表示されない');
+
+    // 新ブロック解禁のステージでそれぞれ出る
+    for (const w of meta.worlds.slice(1)) {
+      await p3.evaluate(([k, n]) => {
+        const p = JSON.parse(localStorage.getItem(k));
+        p.cleared = Array.from({ length: n }, (_, i) => i);
+        localStorage.setItem(k, JSON.stringify(p));
+      }, [STORE_KEY, meta.n]);
+      await p3.reload();
+      await p3.waitForTimeout(100);
+      await closeTutorial(p3);
+      await p3.evaluate(n => window.BitGame.loadLevel(n), w.start);
+      await p3.waitForTimeout(120);
+      const shown = await p3.locator('#tutorial-modal').isVisible();
+      const badge = shown ? await p3.textContent('#tut-badge') : '';
+      const title = shown ? await p3.textContent('#tut-kicker') : '';
+      ok(shown && badge === 'NEW BLOCK' && title.indexOf(w.tag) !== -1,
+        `ステージ${w.start + 1}（${w.name}の先頭）で ${w.tag} のチュートリアルが出る`);
+      await closeTutorial(p3);
+      await p3.evaluate(n => window.BitGame.loadLevel(n), w.start);
+      await p3.waitForTimeout(100);
+      ok(!(await p3.locator('#tutorial-modal').isVisible()),
+        `${w.tag} のチュートリアルは2回目には出ない`);
+    }
+
+    // ルール画面から見返せる
+    await p3.click('#btn-rules');
+    await p3.click('[data-tut="XOR"]');
+    await p3.waitForTimeout(80);
+    ok(await p3.locator('#tutorial-modal').isVisible(), 'ルール画面からチュートリアルを見返せる');
+    await p3.click('#btn-tut-skip');
+
+    await ctx3.close();
+  }
+
   console.log('\n=== 進行状況の保存 ===');
   {
     const ctx2 = await browser.newContext();
     const p2 = await ctx2.newPage();
     await p2.goto(base);
-    await closeRules(p2);
+    await closeTutorial(p2);
     await p2.evaluate(() => window.BitGame.loadLevel(0));
     let guard = 0;
     while (!(await p2.evaluate(() => window.BitCore.isCleared(window.BitGame.state)))) {

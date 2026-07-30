@@ -78,6 +78,23 @@
   </div>
 </div>
 
+<!-- チュートリアル -->
+<div id="tutorial-modal" class="modal" hidden>
+  <div class="modal-card modal-card-tutorial">
+    <div id="tut-badge" class="tut-badge"></div>
+    <div id="tut-kicker" class="tut-kicker"></div>
+    <h3 id="tut-title" class="tut-title"></h3>
+    <div id="tut-demo" class="tut-demo"></div>
+    <p id="tut-text" class="tut-text"></p>
+    <div id="tut-dots" class="tut-dots"></div>
+    <div class="modal-actions">
+      <button id="btn-tut-skip" class="btn btn-small" type="button">スキップ</button>
+      <button id="btn-tut-prev" class="btn" type="button">もどる</button>
+      <button id="btn-tut-next" class="btn btn-primary" type="button">次へ</button>
+    </div>
+  </div>
+</div>
+
 <!-- ルール -->
 <div id="rules-modal" class="modal" hidden>
   <div class="modal-card modal-card-wide">
@@ -95,6 +112,15 @@
       <p class="rules-note">NOTはbitを持たないので、NOTを<em>対象</em>にはできない。<br>
       ブロックは使うと消えるので、無駄打ちすると詰む。詰んだら自動で知らせるので「もどす」で戻ろう。</p>
       <p class="rules-note">操作: ブロックを<b>ドラッグ</b>して重ねる／空きマスへ置く。<b>タップして選び、対象をタップ</b>でもOK。</p>
+      <div class="rules-tuts">
+        <span class="rules-tuts-label">チュートリアルをもう一度見る</span>
+        <div class="rules-tuts-btns">
+          <button class="btn btn-small" type="button" data-tut="INTRO">あそびかた</button>
+          <button class="btn btn-small" type="button" data-tut="NOT">NOT</button>
+          <button class="btn btn-small" type="button" data-tut="AND">AND</button>
+          <button class="btn btn-small" type="button" data-tut="XOR">XOR</button>
+        </div>
+      </div>
     </div>
     <div class="modal-actions">
       <button id="btn-rules-close" class="btn btn-primary" type="button">とじる</button>
@@ -106,6 +132,7 @@
 
 <script src="js/core.js"></script>
 <script src="js/levels.js"></script>
+<script src="js/tutorial.js"></script>
 <script src="js/ui.js"></script>
 </body>
 </html>
