@@ -32,7 +32,7 @@
      --cols / --rows は表示中のステージに合わせてJSが入れる。 */
   --cols: 6;
   --rows: 4;
-  --cell-max: 62px;
+  --cell-max: 96px;
   --cell-min: 26px;
   --chrome-w: 40px;    /* 盤面の左右で使う幅 */
   --chrome-h: 306px;   /* 盤面の上下で使う高さ */
@@ -251,23 +251,24 @@ code {
   100% { transform: scale(1); }
 }
 
+/* ブロックの中身はマスの大きさに追従させる */
 .block-label {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 11px;
+  font-size: clamp(9px, calc(var(--cell) * .19), 20px);
   font-weight: 700;
   letter-spacing: .04em;
   line-height: 1;
 }
 
-.bits { display: flex; gap: 2px; }
+.bits { display: flex; gap: calc(var(--cell) * .035); }
 .bit {
-  width: 11px;
-  height: 15px;
+  width: clamp(8px, calc(var(--cell) * .175), 20px);
+  height: clamp(12px, calc(var(--cell) * .245), 28px);
+  line-height: clamp(12px, calc(var(--cell) * .245), 28px);
   border-radius: 3px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 11px;
+  font-size: clamp(9px, calc(var(--cell) * .185), 21px);
   font-weight: 700;
-  line-height: 15px;
   text-align: center;
 }
 
@@ -288,7 +289,7 @@ code {
 
 .block-not .not-mark {
   font-family: ui-monospace, monospace;
-  font-size: 17px;
+  font-size: clamp(15px, calc(var(--cell) * .3), 32px);
   font-weight: 700;
   line-height: 1;
 }
@@ -1180,15 +1181,12 @@ code {
 
 /* ---------- 小さい画面 ---------- */
 @media (max-width: 560px) {
-  :root { --cell-max: 52px; --gap: 6px; --chrome-h: 292px; }
+  :root { --cell-max: 78px; --gap: 6px; --chrome-h: 292px; }
   .stage-tip { font-size: 12px; }
-  .bit { width: 9px; height: 13px; font-size: 9.5px; line-height: 13px; }
-  .block-label { font-size: 10px; }
 }
 
 @media (max-width: 400px) {
-  :root { --cell-max: 46px; --gap: 5px; --chrome-h: 286px; }
-  .bit { width: 8px; height: 12px; font-size: 9px; line-height: 12px; }
+  :root { --cell-max: 70px; --gap: 5px; --chrome-h: 286px; }
   .controls .btn { padding: 8px 12px; font-size: 13px; }
   .world-grid { grid-template-columns: repeat(8, 1fr); }
   .demo-slot-box, .demo-block, .demo-defeat { width: 50px; height: 50px; }
@@ -1224,7 +1222,7 @@ code {
 /* ---------- 横画面 ---------- */
 /* 上=メニュー、中央=盤面、左=ステージ情報、右=操作ボタン */
 @media (orientation: landscape) and (max-height: 620px) {
-  :root { --cell-max: 58px; --gap: 6px; --chrome-w: 196px; --chrome-h: 80px; }
+  :root { --cell-max: 112px; --gap: 8px; --chrome-w: 200px; --chrome-h: 76px; }
 
   body { padding-top: 0; }
   .topbar { padding: 6px 2px 4px; max-width: 100%; }
@@ -1245,36 +1243,41 @@ code {
     padding: 0;
   }
 
-  /* ステージ情報は横書きのまま90度回して縦帯にする。
-     writing-mode の縦書きは環境によって漢字の字送りが崩れるため、
-     確実に描画できる回転で「縦書き」にしている。 */
+  /* ステージ情報の縦書き。
+     幅を1文字ぶんに絞って1文字ずつ折り返すことで、文字を正立させたまま
+     縦に並べる。writing-mode の縦書きは環境によって漢字の字送りが崩れる
+     ことがあるため、通常の横書きの行送りで組んでいる。 */
   .stage-head, .statusbar {
     display: flex;
-    align-items: center;
+    flex-direction: row;
+    align-items: flex-start;
     justify-content: center;
-    width: 30px;
-    height: 74dvh;
-    max-height: 300px;
-    overflow: visible;
+    gap: 12px;
+    align-self: center;
+    max-height: 84dvh;
   }
   .stage-head { grid-area: head; }
   .statusbar  { grid-area: status; }
 
-  .stage-no, .counters {
-    transform: rotate(90deg);
-    white-space: nowrap;
-    flex: none;
+  .stage-no, .counter {
+    width: 1em;
+    word-break: break-all;
+    white-space: normal;
+    line-height: 1.32;
+    text-align: center;
+    letter-spacing: 0;
+    margin: 0;
   }
   .stage-no {
     font-size: 15px;
-    margin: 0;
-    letter-spacing: .08em;
+    font-family: ui-monospace, monospace;
   }
-  .stage-word { font-size: 11px; color: var(--muted); letter-spacing: .18em; }
-  .stage-of { font-size: 12px; }
-  .world-name { margin-left: 12px; font-size: 12px; }
-  .counters { gap: 18px; font-size: 12px; }
-  .counter b { font-size: 13px; }
+  .stage-word { display: none; }   /* 縦書きでは番号だけで十分 */
+  .stage-of { font-size: 15px; }
+  .world-name { display: block; margin: 8px 0 0; font-size: 13px; }
+  .counters { display: flex; flex-direction: row; gap: 12px; font-size: 13px; }
+  .counter { font-family: ui-monospace, monospace; }
+  .counter b { font-size: 14px; }
   .stage-tip, .preview { display: none; }
 
   .board-wrap { grid-area: board; align-self: center; }
@@ -1359,9 +1362,7 @@ code {
 
 /* 横画面でさらに低い端末 */
 @media (orientation: landscape) and (max-height: 430px) {
-  :root { --cell-max: 54px; --gap: 5px; --chrome-w: 190px; --chrome-h: 72px; }
-  .bit { width: 8px; height: 12px; font-size: 9px; line-height: 12px; }
-  .block-label { font-size: 9px; }
+  :root { --cell-max: 104px; --gap: 7px; --chrome-w: 194px; --chrome-h: 68px; }
   .stage-no { font-size: 13px; }
   .counters { gap: 11px; }
   .home-title { font-size: 22px; }

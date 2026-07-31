@@ -880,9 +880,16 @@ const snapshot = (page) => page.evaluate(() => ({
         boardFits: b.bottom <= window.innerHeight + 1 && b.top >= 0,
         menuOnTop: bar.bottom <= b.top + 1,
         infoLeft: head.right <= b.left + 1 && st.right <= b.left + 1,
-        infoNarrow: head.width <= 40 && st.width <= 40,
-        infoRotated: [head, st].every(() => true) &&
-          getComputedStyle(document.querySelector('.stage-no')).transform !== 'none',
+        // 縦に細長い帯になっていること（回転ではなく1文字ずつの折り返し）
+        infoNarrow: head.width + st.width <= 140,
+        // 1列ずつが「細くて縦に長い」こと
+        infoTall: head.height > head.width * 3 &&
+          [...document.querySelectorAll('.counter')].every(e => {
+            const c = e.getBoundingClientRect();
+            return c.height > c.width * 3;
+          }),
+        infoUpright: getComputedStyle(document.querySelector('.stage-no')).transform === 'none',
+        infoW: Math.round(head.width + st.width),
         ctrlRight: ct.left >= b.right - 1,
         ctrlStacked: (() => {
           const bs = [...document.querySelectorAll('.controls .ctrl-btn')]
@@ -900,7 +907,9 @@ const snapshot = (page) => page.evaluate(() => ({
     ok(cellW >= 50, '空いた幅のぶんマスが大きくなる（' + cellW + 'px）');
     ok(land.menuOnTop, '横画面でもメニューは上にある');
     ok(land.infoLeft, 'ステージ情報が盤面の左に並ぶ');
-    ok(land.infoNarrow && land.infoRotated, 'ステージ情報が縦書きの細い帯になる');
+    ok(land.infoNarrow && land.infoTall,
+      'ステージ情報が縦に細長い帯になる（横幅 ' + land.infoW + 'px）');
+    ok(land.infoUpright, '文字は回さず正立したまま縦に並ぶ');
     ok(land.ctrlRight && land.ctrlStacked, '操作ボタンが盤面の右に縦に並ぶ');
 
     // 横画面でも遊べる
