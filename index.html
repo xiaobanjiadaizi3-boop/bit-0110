@@ -97,7 +97,9 @@
     <p id="tut-text" class="tut-text"></p>
     <div class="tut-loopbar">
       <div id="tut-loop" class="tut-loop"><div id="tut-loop-fill" class="tut-loop-fill"></div></div>
-      <button id="btn-tut-replay" class="tut-replay" type="button" title="もう一度再生">↻</button>
+      <button id="btn-tut-replay" class="btn btn-small tut-replay" type="button">
+        <span aria-hidden="true">↻</span> もう一度
+      </button>
     </div>
     <div id="tut-dots" class="tut-dots"></div>
     <div class="modal-actions">
@@ -138,6 +140,23 @@
       </button>
       <button id="btn-home-stages" class="btn home-btn" type="button">ステージ選択</button>
       <button id="btn-home-help" class="btn home-btn" type="button">あそびかた</button>
+    </div>
+  </div>
+
+  <button id="btn-reset-data" class="home-reset" type="button">データを初期化</button>
+</div>
+
+<!-- データ初期化の確認 -->
+<div id="reset-modal" class="modal" hidden>
+  <div class="modal-card">
+    <h3 class="modal-title">データを初期化</h3>
+    <p class="reset-text">
+      クリア状況・獲得した星・チュートリアルの表示履歴を<b>すべて消して</b>、
+      最初から遊べる状態に戻します。<br>この操作は取り消せません。
+    </p>
+    <div class="modal-actions">
+      <button id="btn-reset-cancel" class="btn" type="button">やめる</button>
+      <button id="btn-reset-confirm" class="btn btn-danger" type="button">初期化する</button>
     </div>
   </div>
 </div>

@@ -511,22 +511,46 @@ code {
   from { transform: scaleX(0); }
   to { transform: scaleX(1); }
 }
+/* 「もう一度」はスマホでも押しやすい大きさにする */
 .tut-replay {
-  appearance: none;
-  border: 1px solid var(--line);
-  background: var(--bg-soft);
-  color: var(--muted);
-  border-radius: 50%;
-  width: 24px;
-  height: 24px;
-  font-size: 13px;
-  line-height: 1;
-  cursor: pointer;
   flex: none;
+  min-height: 34px;
+  padding: 7px 12px;
+  color: var(--muted);
+  white-space: nowrap;
 }
-.tut-replay:hover { color: var(--text); border-color: #48566b; }
+.tut-replay:hover { color: var(--text); }
+.tut-replay-ready {
+  color: var(--text);
+  border-color: var(--accent);
+}
 
-.tut-demo { cursor: pointer; }
+/* 自分で掴めるブロック */
+.demo-grabbable {
+  cursor: grab;
+  touch-action: none;
+  animation: grabHint 1.8s ease-in-out infinite;
+}
+.demo-grabbable:active { cursor: grabbing; }
+@keyframes grabHint {
+  0%, 100% { box-shadow: 0 0 0 0 #7ee78700; transform: translateY(0); }
+  50% { box-shadow: 0 0 0 4px #7ee78740; transform: translateY(-3px); }
+}
+
+/* ドラッグ中は指にそのまま追従させる（アニメーションなし） */
+.demo-ghost.free, .demo-pointer.free { transition: opacity .18s ease; }
+
+.demo-hint {
+  margin: 8px 0 0;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--muted);
+  text-align: center;
+  min-height: 2.6em;
+}
+.demo-hint-ok { color: var(--accent); }
+.demo-hint-warn { color: #ffd66b; }
+.demo-hint-ng { color: #ff8b96; }
 
 .tut-dots {
   display: flex;
@@ -908,6 +932,38 @@ code {
   font-weight: 400;
   opacity: .75;
   font-family: ui-monospace, monospace;
+}
+
+/* 右下のデータ初期化 */
+.home-reset {
+  position: absolute;
+  right: calc(14px + env(safe-area-inset-right));
+  bottom: calc(14px + env(safe-area-inset-bottom));
+  appearance: none;
+  border: 1px solid #3a2a2e;
+  background: #1a1416;
+  color: #9a7078;
+  border-radius: 8px;
+  padding: 9px 13px;
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+}
+.home-reset:hover { color: #ff8b96; border-color: #6b3a42; }
+
+.btn-danger {
+  background: #b3323f;
+  border-color: #b3323f;
+  color: #fff;
+  font-weight: 700;
+}
+.btn-danger:hover { border-color: #d94452; background: #c43947; }
+
+.reset-text {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.9;
+  color: var(--muted);
 }
 
 .footer {

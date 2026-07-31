@@ -252,7 +252,8 @@
 
   /* ---------------- ドラッグ演出の共通部品 ----------------
    * 実際のゲームと同じ挙動にする:
-   *   元のブロックは薄くその場に残り、分身(ゴースト)が指について動く。 */
+   *   元のブロックは薄くその場に残り、分身(ゴースト)が指について動く。
+   * 自動再生でも、プレイヤーが自分で掴んで動かす場合でも同じ分身を使う。 */
   function makeDragRig(stage) {
     var ghostWrap = document.createElement('div');
     ghostWrap.className = 'demo-ghost';
@@ -260,6 +261,7 @@
     pointer.className = 'demo-pointer';
     stage.appendChild(ghostWrap);
     stage.appendChild(pointer);
+    var home = { x: 0, y: 0 };
 
     return {
       ghost: ghostWrap,
@@ -268,10 +270,12 @@
       anchor: function (fromEl, spec) {
         ghostWrap.innerHTML = '';
         ghostWrap.appendChild(miniBlock(spec));
-        ghostWrap.style.left = fromEl.offsetLeft + 'px';
-        ghostWrap.style.top = fromEl.offsetTop + 'px';
-        pointer.style.left = (fromEl.offsetLeft + fromEl.offsetWidth / 2) + 'px';
-        pointer.style.top = (fromEl.offsetTop + fromEl.offsetHeight * 0.78) + 'px';
+        home.x = fromEl.offsetLeft;
+        home.y = fromEl.offsetTop;
+        ghostWrap.style.left = home.x + 'px';
+        ghostWrap.style.top = home.y + 'px';
+        pointer.style.left = (home.x + fromEl.offsetWidth / 2) + 'px';
+        pointer.style.top = (home.y + fromEl.offsetHeight * 0.78) + 'px';
         ghostWrap.style.transform = '';
         pointer.style.transform = '';
       },
@@ -279,10 +283,29 @@
         ghostWrap.classList.add('show', 'lifted');
         pointer.classList.add('show', 'pressed');
       },
-      // 掴んだまま (dx,dy) へ動かす
+      // 自動再生: 掴んだまま (dx,dy) へ動かす
       moveBy: function (dx, dy) {
+        ghostWrap.classList.remove('free');
         ghostWrap.style.transform = 'translate(' + dx + 'px,' + dy + 'px)';
         pointer.style.transform = 'translate(' + dx + 'px,' + dy + 'px)';
+      },
+      // 手動ドラッグ: 指の位置にそのまま追従させる
+      follow: function (clientX, clientY) {
+        var r = stage.getBoundingClientRect();
+        var w = ghostWrap.offsetWidth || 58;
+        var h = ghostWrap.offsetHeight || 58;
+        ghostWrap.classList.add('free');
+        pointer.classList.add('free');
+        ghostWrap.style.transform =
+          'translate(' + (clientX - r.left - w / 2 - home.x) + 'px,' +
+          (clientY - r.top - h * 0.78 - home.y) + 'px)';
+        pointer.style.transform = ghostWrap.style.transform;
+      },
+      snapBack: function () {
+        ghostWrap.classList.remove('free');
+        pointer.classList.remove('free');
+        ghostWrap.style.transform = '';
+        pointer.style.transform = '';
       },
       drop: function () {
         ghostWrap.classList.remove('lifted');
@@ -290,8 +313,8 @@
         pointer.classList.add('released');
       },
       hide: function () {
-        ghostWrap.classList.remove('show', 'lifted');
-        pointer.classList.remove('show', 'pressed', 'released');
+        ghostWrap.classList.remove('show', 'lifted', 'free');
+        pointer.classList.remove('show', 'pressed', 'released', 'free');
       },
       reset: function () {
         ghostWrap.className = 'demo-ghost';
@@ -302,8 +325,59 @@
     };
   }
 
+  /* 自分で掴んで動かせるようにする。
+   * つまんだ時点で自動再生は止まり、あとはプレイヤーのペースで動かせる。 */
+  function enableManualDrag(cfg) {
+    var dragging = false;
+    var srcEl = null;
+
+    function overTarget(ev) {
+      var el = document.elementFromPoint(ev.clientX, ev.clientY);
+      return !!(el && el.closest('.demo-slot-dst'));
+    }
+
+    function onDown(ev) {
+      if (cfg.isDone()) return;
+      srcEl = ev.currentTarget;
+      dragging = true;
+      ev.preventDefault();
+      cfg.onGrab();
+      cfg.rig.anchor(srcEl, cfg.srcSpec);
+      cfg.rig.grab();
+      cfg.rig.follow(ev.clientX, ev.clientY);
+      document.addEventListener('pointermove', onMove);
+      document.addEventListener('pointerup', onUp);
+      document.addEventListener('pointercancel', onUp);
+    }
+
+    function onMove(ev) {
+      if (!dragging) return;
+      cfg.rig.follow(ev.clientX, ev.clientY);
+      cfg.onHover(overTarget(ev));
+    }
+
+    function onUp(ev) {
+      if (!dragging) return;
+      dragging = false;
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup', onUp);
+      document.removeEventListener('pointercancel', onUp);
+      var hit = overTarget(ev);
+      cfg.onHover(false);
+      if (hit) { cfg.rig.drop(); cfg.onDrop(); }
+      else { cfg.rig.snapBack(); cfg.onCancel(); }
+    }
+
+    return {
+      attach: function (el) {
+        el.classList.add('demo-grabbable');
+        el.addEventListener('pointerdown', onDown);
+      }
+    };
+  }
+
   /* ---------------- デモのアニメーション ---------------- */
-  // 各デモは {play, stop} を返す。play はループする。
+  // 各デモは {play, stop, restart, cycle} を返す。
   function buildDemo(host, demo, reduced) {
     host.innerHTML = '';
     var noop = function () {};
@@ -330,12 +404,12 @@
         clear();
         for (var i = 0; i < cells.length; i++) {
           (function (i) {
-            t(300 + i * 380, function () {
+            t(400 + i * 520, function () {
               for (var j = 0; j < cells.length; j++) cells[j].classList.toggle('bit-focus', j === i);
             });
           })(i);
         }
-        t(300 + cells.length * 380 + 500, function () {
+        t(400 + cells.length * 520 + 600, function () {
           for (var j = 0; j < cells.length; j++) cells[j].classList.remove('bit-focus');
         });
         t(CYCLE, bitLoop);
@@ -368,9 +442,9 @@
           m.el.classList.remove('demo-vanish');
           m.tag.classList.remove('show');
         });
-        t(500, function () { made.forEach(function (m) { m.el.classList.add('demo-hit'); }); });
-        t(1000, function () { made.forEach(function (m) { m.tag.classList.add('show'); }); });
-        t(1500, function () {
+        t(700, function () { made.forEach(function (m) { m.el.classList.add('demo-hit'); }); });
+        t(1400, function () { made.forEach(function (m) { m.tag.classList.add('show'); }); });
+        t(2200, function () {
           made.forEach(function (m) { m.el.classList.remove('demo-hit'); m.el.classList.add('demo-vanish'); });
         });
         t(CYCLE, goalLoop);
@@ -378,62 +452,33 @@
       return { play: goalLoop, stop: clear, restart: goalLoop, cycle: CYCLE };
     }
 
-    /* --- 空きマスへドラッグして移動 --- */
-    if (demo.kind === 'move') {
-      stage.classList.add('demo-stage-formula');
-      var fromSlot = makeSlot(stage, 'いまここ', 'src');
-      addSign(stage, '→');
-      var toSlot = makeSlot(stage, 'ここへ動かす', 'dst');
-      fromSlot.setBlock(miniBlock(demo.src));
-      toSlot.setEmptyCell();
-      var mrig = makeDragRig(stage);
-
-      if (reduced) {
-        fromSlot.setGone('動かした');
-        toSlot.setBlock(miniBlock(demo.src));
-        return { play: noop, stop: clear, restart: noop, cycle: 0 };
-      }
-
-      var moveLoop = function () {
-        clear();
-        fromSlot.setBlock(miniBlock(demo.src));
-        toSlot.setEmptyCell();
-        mrig.reset();
-        mrig.anchor(fromSlot.inner(), demo.src);
-        var mdx = function () { return toSlot.inner().offsetLeft - fromSlot.inner().offsetLeft; };
-
-        t(500, function () { mrig.grab(); fromSlot.dim(true); });
-        t(900, function () { mrig.moveBy(mdx() * 0.5, -20); });
-        t(1300, function () { mrig.moveBy(mdx() - 8, -12); toSlot.highlight(true); });
-        t(1800, function () {
-          mrig.drop();
-          mrig.hide();
-          fromSlot.setGone('空いた');
-          toSlot.setBlock(miniBlock(demo.src), true);
-          toSlot.highlight(false);
-        });
-        t(CYCLE, moveLoop);
-      };
-      return { play: moveLoop, stop: clear, restart: moveLoop, cycle: CYCLE };
-    }
-
-    /* --- 重ねる（apply / forbid） ---
-     * 「動かす」「重ねる先」「結果」を3つ並べたまま演出する。
-     * アニメーションが終わったあとも式がそのまま残るので、
-     * どのブロックを何に重ねて何になったのかが、いつ見ても分かる。 */
-    stage.classList.add('demo-stage-formula');
+    /* --- 自分で動かせるデモ（move / apply / forbid） --- */
+    var isMove = demo.kind === 'move';
     var forbidden = demo.kind === 'forbid';
+    stage.classList.add('demo-stage-formula');
 
-    var srcSlot = makeSlot(stage, '動かす', 'src');
-    addSign(stage, '+');
-    var dstSlot = makeSlot(stage, '重ねる先', 'dst');
-    var eqSign = addSign(stage, '=');
-    var resSlot = makeSlot(stage, '結果', 'res');
+    var hint = document.createElement('p');
+    hint.className = 'demo-hint';
+    host.appendChild(hint);
+
+    var srcSlot, dstSlot, resSlot;
+    if (isMove) {
+      srcSlot = makeSlot(stage, 'いまここ', 'src');
+      addSign(stage, '→');
+      dstSlot = makeSlot(stage, 'ここへ動かす', 'dst');
+    } else {
+      srcSlot = makeSlot(stage, '動かす', 'src');
+      addSign(stage, '+');
+      dstSlot = makeSlot(stage, '重ねる先', 'dst');
+      addSign(stage, '=');
+      resSlot = makeSlot(stage, '結果', 'res');
+    }
     var rig = makeDragRig(stage);
 
-    var beforeStr = demo.dst.bits || '';
+    /* 演算結果を先に計算しておく */
+    var beforeStr = (demo.dst && demo.dst.bits) || '';
     var afterStr = '', changed = null, defeated = false, unchanged = false;
-    if (!forbidden) {
+    if (!isMove && !forbidden) {
       var srcBits = demo.src.bits === undefined ? null : parseInt(demo.src.bits, 2);
       var dstBits = parseInt(demo.dst.bits, 2);
       var after = Core.operate(demo.src.type, dstBits, srcBits);
@@ -443,9 +488,7 @@
       unchanged = after === dstBits;
     }
 
-    // 結果スロットの中身
     function resultNode() {
-      if (forbidden) return null;
       if (defeated) {
         var box = document.createElement('div');
         box.className = 'demo-defeat';
@@ -457,66 +500,123 @@
       return el;
     }
 
-    var setStart = function () {
-      srcSlot.setBlock(miniBlock(demo.src));
-      srcSlot.setLabel('動かす');
-      dstSlot.setBlock(miniBlock(demo.dst));
-      dstSlot.setLabel('重ねる先');
-      resSlot.setPending();
-      eqSign.textContent = forbidden ? '=' : '=';
-      rig.reset();
-      rig.anchor(srcSlot.inner(), demo.src);
-    };
+    var done = false;
+    var manual = false;
 
-    if (reduced) {
-      setStart();
-      if (forbidden) { dstSlot.reject(true); resSlot.setForbidden(); }
-      else {
-        srcSlot.setSpent(miniBlock(demo.src), '使って消えた');
-        dstSlot.setBlock(miniBlock({ type: demo.dst.type, bits: afterStr }));
-        dstSlot.setLabel(beforeStr + ' → ' + afterStr, 'hot');
-        resSlot.setBlock(resultNode());
-      }
-      return { play: noop, stop: clear, restart: noop, cycle: 0 };
+    function setHint(text, cls) {
+      hint.textContent = text;
+      hint.className = 'demo-hint' + (cls ? ' demo-hint-' + cls : '');
     }
 
-    var loop = function () {
-      clear();
-      setStart();
-      var adx = function () { return dstSlot.inner().offsetLeft - srcSlot.inner().offsetLeft; };
-
-      t(500, function () { rig.grab(); srcSlot.dim(true); });
-      t(900, function () { rig.moveBy(adx() * 0.5, -20); });
-      t(1300, function () {
-        rig.moveBy(forbidden ? adx() - 18 : adx() - 10, -12);
-        if (forbidden) dstSlot.reject(true); else dstSlot.highlight(true);
-      });
-
-      if (forbidden) {
-        t(1800, function () { rig.moveBy(0, 0); resSlot.setForbidden(); });
-        t(2300, function () { rig.hide(); srcSlot.dim(false); });
-        t(CYCLE, loop);
-        return;
+    /* 最初の状態に戻す */
+    function setStart() {
+      done = false;
+      var srcBlock = miniBlock(demo.src);
+      srcSlot.setBlock(srcBlock);
+      srcSlot.setLabel(isMove ? 'いまここ' : '動かす');
+      if (isMove) {
+        dstSlot.setEmptyCell();
+        dstSlot.setLabel('ここへ動かす');
+      } else {
+        dstSlot.setBlock(miniBlock(demo.dst));
+        dstSlot.setLabel('重ねる先');
+        resSlot.setPending();
       }
+      rig.reset();
+      rig.anchor(srcSlot.inner(), demo.src);
+      dragger.attach(srcBlock);
+      setHint(isMove ? '← このブロックを空きマスへドラッグしてみよう'
+        : '← このブロックを「重ねる先」へドラッグしてみよう');
+    }
 
-      t(1800, function () {
-        rig.drop();
-        rig.hide();
+    /* 重ねた（または置いた）ときの結果表示 */
+    function resolve() {
+      done = true;
+      rig.hide();
+      dstSlot.highlight(false);
+      if (isMove) {
+        srcSlot.setGone('空いた');
+        dstSlot.setBlock(miniBlock(demo.src), true);
+        setHint('置けた！ 位置を変えても手数は増えない', 'ok');
+      } else if (forbidden) {
+        done = false;                       // 何度でも試せる
+        dstSlot.reject(true);
+        resSlot.setForbidden();
+        rig.snapBack();
+        setHint('NOTはbitを持たないので重ねられない', 'ng');
+        return;
+      } else {
         srcSlot.setSpent(miniBlock(demo.src), '使って消えた');
-        dstSlot.highlight(false);
         var changedBlock = miniBlock({ type: demo.dst.type, bits: afterStr });
         setBits(changedBlock, afterStr, changed);
         dstSlot.setBlock(changedBlock, true);
         dstSlot.setLabel(beforeStr + ' → ' + afterStr, unchanged ? 'warn' : 'hot');
-      });
-      t(2250, function () {
         resSlot.setBlock(resultNode(), true);
-        if (unchanged) resSlot.warn('変化なし');
+        if (unchanged) {
+          resSlot.warn('変化なし');
+          setHint('効果がなくても、重ねたブロックは消えてしまう', 'warn');
+        } else {
+          setHint(defeated ? '0000 か 1111 になったので撃破！' : 'bitが書き換わった', 'ok');
+        }
+      }
+      if (cfg.onDone) cfg.onDone();
+    }
+
+    var cfg = { onDone: null };
+
+    var dragger = enableManualDrag({
+      rig: rig,
+      srcSpec: demo.src,
+      isDone: function () { return done; },
+      onGrab: function () {
+        clear();                       // 自動再生を止めてプレイヤーに渡す
+        if (!manual) { manual = true; if (cfg.onManual) cfg.onManual(); }
+        if (done) return;
+        srcSlot.dim(true);
+        setHint('そのまま「' + (isMove ? '空きマス' : '重ねる先') + '」の上まで運ぼう');
+      },
+      onHover: function (on) {
+        if (forbidden) dstSlot.reject(on); else dstSlot.highlight(on);
+      },
+      onDrop: resolve,
+      onCancel: function () {
+        srcSlot.dim(false);
+        rig.hide();
+        setHint('「重ねる先」の上で指をはなしてね');
+      }
+    });
+
+    if (reduced) {
+      setStart();
+      return { play: noop, stop: clear, restart: setStart, cycle: 0, interactive: true };
+    }
+
+    /* 自動のお手本。ゆっくり動かし、プレイヤーが触ったら止まる。 */
+    var loop = function () {
+      clear();
+      setStart();
+      var dx = function () { return dstSlot.inner().offsetLeft - srcSlot.inner().offsetLeft; };
+
+      t(800, function () { rig.grab(); srcSlot.dim(true); });
+      t(1300, function () { rig.moveBy(dx() * 0.45, -22); });
+      t(2000, function () {
+        rig.moveBy(forbidden ? dx() - 18 : dx() - 10, -12);
+        if (forbidden) dstSlot.reject(true); else dstSlot.highlight(true);
       });
+      t(2800, function () { rig.drop(); resolve(); });
       t(CYCLE, loop);
     };
 
-    return { play: loop, stop: clear, restart: loop, cycle: CYCLE };
+    return {
+      play: loop,
+      stop: clear,
+      restart: function () { manual = false; loop(); },
+      manualReset: function () { clear(); setStart(); },
+      cycle: CYCLE,
+      interactive: true,
+      onManual: function (fn) { cfg.onManual = fn; },
+      onDone: function (fn) { cfg.onDone = fn; }
+    };
   }
 
   /* ---------------- モーダル制御 ---------------- */
@@ -550,6 +650,19 @@
 
     if (state.demo) state.demo.stop();
     state.demo = buildDemo($('tut-demo'), step.demo, reducedMotion);
+
+    // 自分で動かし始めたら自動再生の表示は引っこめる
+    if (state.demo.onManual) {
+      state.demo.onManual(function () {
+        $('tut-loop').hidden = true;
+        $('btn-tut-replay').classList.add('tut-replay-ready');
+      });
+    }
+
+    // バーの表示は同期的に決める（描画待ちで一瞬消えて見えないように）
+    $('tut-loop').hidden = !state.demo.cycle;
+    $('btn-tut-replay').classList.remove('tut-replay-ready');
+
     // レイアウト確定後に再生（offsetLeft を使うため）
     requestAnimationFrame(function () {
       if (!state.demo) return;
@@ -570,8 +683,10 @@
     fill.style.animation = 'loopBar ' + cycle + 'ms linear infinite';
   }
 
+  // 「もう一度」: 触って止めていた場合も含めて、最初からやり直す
   function replay() {
-    if (!state.demo || !state.demo.cycle) return;
+    if (!state.demo) return;
+    $('btn-tut-replay').classList.remove('tut-replay-ready');
     state.demo.restart();
     restartLoopBar(state.demo.cycle);
   }
@@ -649,7 +764,6 @@
     $('btn-tut-prev').addEventListener('click', prev);
     $('btn-tut-skip').addEventListener('click', skip);
     $('btn-tut-replay').addEventListener('click', replay);
-    $('tut-demo').addEventListener('click', replay);   // デモをタップしても最初から
     document.addEventListener('keydown', function (ev) {
       if ($('tutorial-modal').hidden) return;
       if (ev.key === 'ArrowRight' || ev.key === 'Enter') { ev.preventDefault(); next(); }

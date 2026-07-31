@@ -441,7 +441,7 @@ const snapshot = (page) => page.evaluate(() => ({
     // ドラッグ演出が動いているか（分身と指マーカーが表示される）
     await p3.click('#btn-help');
     await p3.click('#help-list [data-tut="OR"]');
-    await p3.waitForTimeout(1150);   // つかんで運んでいる最中
+    await p3.waitForTimeout(1700);   // つかんで運んでいる最中
     const dragging = await p3.evaluate(() => {
       const g = document.querySelector('#tut-demo .demo-ghost');
       const pt = document.querySelector('#tut-demo .demo-pointer');
@@ -463,7 +463,7 @@ const snapshot = (page) => page.evaluate(() => ({
     ok(dragging.moved, '分身が対象へ向かって動く');
     ok(dragging.labels.join('/') === '動かす/重ねる先/結果',
       '「動かす・重ねる先・結果」のラベルが並ぶ（' + dragging.labels.join('/') + '）');
-    await p3.waitForTimeout(1450);   // 落として結果が出たあと
+    await p3.waitForTimeout(1500);   // 落として結果が出たあと
     const dropped = await p3.evaluate(() => {
       const q = sel => document.querySelector('#tut-demo ' + sel);
       const bitsOf = el => el ? [...el.querySelectorAll('.bit')].map(b => b.textContent).join('') : '';
@@ -487,6 +487,85 @@ const snapshot = (page) => page.evaluate(() => ({
     await closeTutorial(p3);
 
     await ctx3.close();
+  }
+
+  console.log('\n=== チュートリアルを自分で動かす ===');
+  {
+    await page.evaluate(() => window.BitTutorial.open('OR'));
+    await page.waitForTimeout(200);
+
+    const grabbable = await page.locator('#tut-demo .demo-slot-src .demo-grabbable').count();
+    ok(grabbable === 1, '「動かす」ブロックが自分で掴める状態になっている');
+    ok((await page.textContent('#tut-demo .demo-hint')).indexOf('ドラッグ') !== -1,
+      'ドラッグを促す案内が出る');
+
+    // 自分の手でゆっくり運ぶ（自動再生に邪魔されないこと）
+    const src = await page.locator('#tut-demo .demo-slot-src .demo-slot-box').boundingBox();
+    const dst = await page.locator('#tut-demo .demo-slot-dst .demo-slot-box').boundingBox();
+    await page.mouse.move(src.x + src.width / 2, src.y + src.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(src.x + src.width / 2 + 15, src.y + src.height / 2 - 10, { steps: 4 });
+    await page.waitForTimeout(1200);          // ゆっくり持っていても勝手に進まない
+    const held = await page.evaluate(() => {
+      const g = document.querySelector('#tut-demo .demo-ghost');
+      return {
+        following: !!g && g.classList.contains('free') && g.classList.contains('show'),
+        resStillPending: !!document.querySelector('#tut-demo .demo-slot-res .demo-slot-pending')
+      };
+    });
+    ok(held.following, '掴んだブロックが指に追従する');
+    ok(held.resStillPending, '持っている間は自動再生が止まって結果が出ない');
+
+    await page.mouse.move(dst.x + dst.width / 2, dst.y + dst.height / 2, { steps: 8 });
+    const hover = await page.evaluate(() =>
+      !!document.querySelector('#tut-demo .demo-slot-dst .demo-slot-hot'));
+    ok(hover, '重ねる先の上に来ると光って教えてくれる');
+
+    await page.mouse.up();
+    await page.waitForTimeout(200);
+    const dropped2 = await page.evaluate(() => {
+      const q = s => document.querySelector('#tut-demo ' + s);
+      const bits = el => el ? [...el.querySelectorAll('.bit')].map(b => b.textContent).join('') : '';
+      return {
+        dst: bits(q('.demo-slot-dst .demo-slot-box')),
+        defeat: !!q('.demo-slot-res .demo-defeat'),
+        hint: (q('.demo-hint') || {}).textContent || ''
+      };
+    });
+    ok(dropped2.dst === '1111' && dropped2.defeat,
+      '自分で重ねると演算が起きて結果が出る（' + dropped2.dst + '）');
+    ok(dropped2.hint.indexOf('撃破') !== -1, '結果の説明が出る（' + dropped2.hint + '）');
+
+    // 「もう一度」で最初の状態に戻る
+    const btn = await page.locator('#btn-tut-replay').boundingBox();
+    ok(btn.height >= 30 && btn.width >= 60,
+      'もう一度ボタンが押しやすい大きさ（' + Math.round(btn.width) + 'x' + Math.round(btn.height) + '）');
+    await page.click('#btn-tut-replay');
+    await page.waitForTimeout(150);
+    const afterReplay = await page.evaluate(() => {
+      const q = s => document.querySelector('#tut-demo ' + s);
+      const bits = el => el ? [...el.querySelectorAll('.bit')].map(b => b.textContent).join('') : '';
+      return {
+        dst: bits(q('.demo-slot-dst .demo-slot-box')),
+        pending: !!q('.demo-slot-res .demo-slot-pending'),
+        grabbable: !!q('.demo-slot-src .demo-grabbable')
+      };
+    });
+    ok(afterReplay.dst === '0101' && afterReplay.pending,
+      '「もう一度」で最初の状態に戻る（' + afterReplay.dst + '）');
+    ok(afterReplay.grabbable, '戻したあとも自分で掴める');
+
+    // 対象外の場所で離すと元に戻るだけ
+    const src2 = await page.locator('#tut-demo .demo-slot-src .demo-slot-box').boundingBox();
+    await page.mouse.move(src2.x + src2.width / 2, src2.y + src2.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(src2.x + src2.width / 2, src2.y - 40, { steps: 5 });
+    await page.mouse.up();
+    await page.waitForTimeout(150);
+    ok(await page.evaluate(() =>
+      !!document.querySelector('#tut-demo .demo-slot-res .demo-slot-pending')),
+      '関係ない場所で離しても何も起きない');
+    await closeTutorial(page);
   }
 
   console.log('\n=== チュートリアルのループ再生 ===');
@@ -672,6 +751,46 @@ const snapshot = (page) => page.evaluate(() => ({
     await p5.reload();
     await p5.waitForTimeout(150);
     ok(await p5.locator('#home-screen').isVisible(), 'リロード後もホーム画面から始まる');
+
+    // データの初期化
+    const pos = await p5.evaluate(() => {
+      const b = document.getElementById('btn-reset-data').getBoundingClientRect();
+      return { right: window.innerWidth - b.right, bottom: window.innerHeight - b.bottom };
+    });
+    ok(pos.right < 40 && pos.bottom < 40,
+      '「データを初期化」がホーム画面の右下にある（右' + Math.round(pos.right) + ' 下' + Math.round(pos.bottom) + '）');
+
+    await p5.click('#btn-reset-data');
+    await p5.waitForTimeout(100);
+    ok(await p5.locator('#reset-modal').isVisible(), '確認画面が出る');
+    await p5.click('#btn-reset-cancel');
+    await p5.waitForTimeout(100);
+    ok(await p5.textContent('#home-cleared') === '1', 'やめるを選ぶとデータは消えない');
+
+    await p5.click('#btn-reset-data');
+    await p5.click('#btn-reset-confirm');
+    await p5.waitForTimeout(150);
+    const afterReset = await p5.evaluate(([k]) => ({
+      cleared: document.getElementById('home-cleared').textContent,
+      gold: document.getElementById('home-gold').textContent,
+      label: document.getElementById('home-continue-label').textContent,
+      sub: document.getElementById('home-continue-sub').textContent,
+      stored: localStorage.getItem(k)
+    }), [STORE_KEY]);
+    ok(afterReset.cleared === '0' && afterReset.gold === '0', '初期化するとクリア数と星が0に戻る');
+    ok(afterReset.label === 'はじめる' && afterReset.sub.indexOf('STAGE 1') === 0,
+      '初期化後は STAGE 1 から「はじめる」になる');
+    ok(JSON.parse(afterReset.stored).cleared.length === 0, '保存データも消える');
+
+    // 初期化したのでチュートリアルもまた出る
+    await p5.click('#btn-home-continue');
+    await p5.waitForTimeout(150);
+    ok(await p5.locator('#tutorial-modal').isVisible(), '初期化後はチュートリアルもまた出る');
+    await closeTutorial(p5);
+
+    await p5.reload();
+    await p5.waitForTimeout(150);
+    ok(await p5.textContent('#home-cleared') === '0', 'リロードしても初期化された状態が残る');
     await ctx5.close();
   }
 

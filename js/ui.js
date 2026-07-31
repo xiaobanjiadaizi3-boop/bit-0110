@@ -517,6 +517,21 @@
   });
   $('btn-home-help').addEventListener('click', function () { $('help-modal').hidden = false; });
 
+  /* データの初期化（確認してから消す） */
+  $('btn-reset-data').addEventListener('click', function () { $('reset-modal').hidden = false; });
+  $('btn-reset-cancel').addEventListener('click', function () { $('reset-modal').hidden = true; });
+  $('btn-reset-confirm').addEventListener('click', function () {
+    try { localStorage.removeItem(STORE_KEY); } catch (e) {}
+    progress = { cleared: [], last: 0, seenTutorials: [], best: {} };
+    saveProgress(progress);
+    $('reset-modal').hidden = true;
+    loadLevel(0, true);      // 盤面もステージ1に戻す
+    showHome();
+  });
+  $('reset-modal').addEventListener('click', function (ev) {
+    if (ev.target === this) this.hidden = true;
+  });
+
   /* クリア状況に応じた星。最短手数なら金、それ以外のクリアは青。 */
   function starFor(i) {
     if (progress.cleared.indexOf(i) === -1) return null;
@@ -600,6 +615,7 @@
     if (ev.key === 'Escape') {
       if (!$('stage-modal').hidden) closeStageModal();
       $('help-modal').hidden = true;
+      $('reset-modal').hidden = true;
       clearSelection();
     } else if (ev.key === 'z' && (ev.ctrlKey || ev.metaKey)) {
       ev.preventDefault();
