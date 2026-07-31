@@ -34,11 +34,10 @@
       var p = raw ? JSON.parse(raw) : null;
       if (p && Array.isArray(p.cleared)) {
         if (!Array.isArray(p.seenTutorials)) p.seenTutorials = [];
-        if (!p.best || typeof p.best !== 'object') p.best = {};
         return p;
       }
     } catch (e) { /* localStorageが使えない環境でも遊べるようにする */ }
-    return { cleared: [], last: 0, seenTutorials: [], best: {} };
+    return { cleared: [], last: 0, seenTutorials: [] };
   }
 
   function saveProgress(p) {
@@ -104,9 +103,6 @@
       if (selEl) selEl.classList.add('selected');
       markTargets(G.selected, 'target-ok');
     }
-    $('move-count').textContent = G.moves;
-    $('par-count').textContent = G.level.par;
-    $('bad-count').textContent = s.blocks.filter(function (b) { return b.type === 'bad'; }).length;
     $('btn-undo').disabled = G.history.length === 0;
   }
 
@@ -204,22 +200,14 @@
 
   function onClear() {
     if (progress.cleared.indexOf(G.index) === -1) progress.cleared.push(G.index);
-    var prevBest = progress.best[G.index];
-    if (prevBest === undefined || G.moves < prevBest) progress.best[G.index] = G.moves;
     progress.last = Math.min(G.index + 1, LEVELS.length - 1);
     saveProgress(progress);
 
-    var perfect = G.moves <= G.level.par;
-    var star = $('clear-star');
-    star.textContent = '★';
-    star.className = 'clear-star ' + (perfect ? 'gold' : 'blue');
-    $('clear-text').textContent = perfect
-      ? G.moves + '手（最短）でクリア！ 金の星を獲得'
-      : G.moves + '手でクリア（最短は' + G.level.par + '手）';
-    $('btn-next').style.display = G.index < LEVELS.length - 1 ? '' : 'none';
-    if (G.index === LEVELS.length - 1) {
-      $('clear-text').textContent += ' — 全' + LEVELS.length + 'ステージ制覇！';
-    }
+    var last = G.index === LEVELS.length - 1;
+    $('clear-text').textContent = last
+      ? '全' + LEVELS.length + 'ステージ制覇！'
+      : 'STAGE ' + (G.index + 1) + ' クリア';
+    $('btn-next').style.display = last ? 'none' : '';
     setTimeout(function () { $('clear-modal').hidden = false; }, 260);
   }
 
@@ -510,21 +498,11 @@
   });
 
   /* ---------------- ホーム画面 ---------------- */
-  function starCounts() {
-    var gold = 0, blue = 0;
-    progress.cleared.forEach(function (i) {
-      if (starFor(i) === 'gold') gold++; else blue++;
-    });
-    return { gold: gold, blue: blue };
-  }
-
   function showHome() {
-    var n = starCounts();
     var resume = isUnlocked(progress.last) ? progress.last : 0;
     $('home-total').textContent = LEVELS.length;
+    $('home-total-stat').textContent = LEVELS.length;
     $('home-cleared').textContent = progress.cleared.length;
-    $('home-gold').textContent = n.gold;
-    $('home-blue').textContent = n.blue;
     $('home-continue-label').textContent = progress.cleared.length ? 'つづきから' : 'はじめる';
     $('home-continue-sub').textContent = 'STAGE ' + (resume + 1) + ' / ' + LEVELS.length;
     $('clear-modal').hidden = true;
@@ -548,7 +526,7 @@
   $('btn-reset-cancel').addEventListener('click', function () { $('reset-modal').hidden = true; });
   $('btn-reset-confirm').addEventListener('click', function () {
     try { localStorage.removeItem(STORE_KEY); } catch (e) {}
-    progress = { cleared: [], last: 0, seenTutorials: [], best: {} };
+    progress = { cleared: [], last: 0, seenTutorials: [] };
     saveProgress(progress);
     $('reset-modal').hidden = true;   // 画面の明るさの設定は消さない
     loadLevel(0, true);      // 盤面もステージ1に戻す
@@ -557,13 +535,6 @@
   $('reset-modal').addEventListener('click', function (ev) {
     if (ev.target === this) this.hidden = true;
   });
-
-  /* クリア状況に応じた星。最短手数なら金、それ以外のクリアは青。 */
-  function starFor(i) {
-    if (progress.cleared.indexOf(i) === -1) return null;
-    var best = progress.best[i];
-    return (best !== undefined && best <= LEVELS[i].par) ? 'gold' : 'blue';
-  }
 
   /* ステージ選択（ワールドごとにまとめて表示） */
   function renderStageList() {
@@ -590,15 +561,9 @@
             (i === G.index ? ' current' : '');
           b.textContent = i + 1;
           b.disabled = !isUnlocked(i);
-          var star = starFor(i);
-          if (star) {
-            var sp = document.createElement('span');
-            sp.className = 'stage-star ' + star;
-            sp.textContent = '★';
-            b.appendChild(sp);
-          }
           b.title = !isUnlocked(i) ? 'まだ開放されていない'
-            : 'STAGE ' + (i + 1) + (star === 'gold' ? '（最短クリア）' : star ? '（クリア済み）' : '');
+            : 'STAGE ' + (i + 1) +
+              (progress.cleared.indexOf(i) !== -1 ? '（クリア済み）' : '');
           b.addEventListener('click', function () {
             $('stage-modal').hidden = true;
             loadLevel(i);

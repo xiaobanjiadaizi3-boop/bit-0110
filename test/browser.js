@@ -587,94 +587,6 @@ const snapshot = (page) => page.evaluate(() => ({
     await closeTutorial(page);
   }
 
-  console.log('\n=== ステージ選択の星 ===');
-  {
-    const ctx4 = await browser.newContext({ viewport: { width: 900, height: 900 } });
-    const p4 = await ctx4.newPage();
-    await p4.goto(base);
-    await leaveHome(p4);
-    await closeTutorial(p4);
-
-    // ステージ1を最短でクリア → 金の星
-    await p4.evaluate(() => window.BitGame.loadLevel(0));
-    let h = await p4.evaluate(() => window.BitCore.hint(window.BitGame.state));
-    await p4.click(`#board .block[data-id="${h.srcId}"]`);
-    await p4.click(`#board .block[data-id="${h.dstId}"]`);
-    await p4.waitForSelector('#clear-modal:not([hidden])', { timeout: 3000 });
-    ok(await p4.locator('#clear-star.gold').count() === 1, '最短クリアで金の星が出る');
-    await p4.click('#btn-next');
-
-    // 「1手損しても勝てる」ステージを探して遠回りクリア → 青い星
-    const detour = await p4.evaluate(() => {
-      const C = window.BitCore, L = window.BitLevels;
-      for (let i = 1; i < 40; i++) {
-        const st = C.createState(L[i]);
-        for (const src of st.blocks) for (const dst of st.blocks) {
-          if (!C.canApply(src, dst)) continue;
-          const ns = C.applyBlock(st, src.id, dst.id);
-          // 1手使ったのに残り最短が減っていない = 遠回りだが勝てる
-          if (ns && C.solve(ns) === L[i].par) return { level: i, srcId: src.id, dstId: dst.id };
-        }
-      }
-      return null;
-    });
-    ok(detour !== null, '遠回りしても勝てるステージが見つかる（ステージ' + (detour.level + 1) + '）');
-
-    await p4.evaluate(n => window.BitGame.loadLevel(n), detour.level);
-    await closeTutorial(p4);
-    await p4.click(`#board .block[data-id="${detour.srcId}"]`);
-    await p4.click(`#board .block[data-id="${detour.dstId}"]`);
-    await p4.waitForFunction(() => !window.BitGame.busy, null, { timeout: 8000 });
-    let guard = 0;
-    while (!(await p4.evaluate(() => window.BitCore.isCleared(window.BitGame.state)))) {
-      if (++guard > 16) break;
-      h = await p4.evaluate(() => window.BitCore.hint(window.BitGame.state));
-      if (!h) break;
-      await p4.click(`#board .block[data-id="${h.srcId}"]`);
-      await p4.click(`#board .block[data-id="${h.dstId}"]`);
-      await p4.waitForFunction(() => !window.BitGame.busy, null, { timeout: 8000 });
-    }
-    await p4.waitForSelector('#clear-modal:not([hidden])', { timeout: 3000 });
-    const detourMoves = await p4.evaluate(() => window.BitGame.moves);
-    const detourPar = await p4.evaluate(n => window.BitLevels[n].par, detour.level);
-    ok(detourMoves === detourPar + 1,
-      '遠回りで ' + detourMoves + '手クリア（最短' + detourPar + '手）');
-    ok(await p4.locator('#clear-star.blue').count() === 1, '最短でないクリアは青い星になる');
-    await p4.click('#btn-replay');
-    await closeOver(p4);
-
-    // ステージ一覧での星の出かた
-    await p4.click('#btn-stages');
-    const stars = await p4.evaluate((d) => {
-      const btns = [...document.querySelectorAll('.stage-btn')];
-      const at = i => {
-        const st = btns[i].querySelector('.stage-star');
-        return st ? st.className.replace('stage-star ', '') : null;
-      };
-      const uncleared = btns.findIndex((b, i) => i !== 0 && i !== d && !b.querySelector('.stage-star'));
-      return {
-        gold: at(0), blue: at(d), none: uncleared, uncle: uncleared >= 0 ? at(uncleared) : 'x',
-        text: btns[0].querySelector('.stage-star').textContent,
-        corner: getComputedStyle(btns[0].querySelector('.stage-star')).position
-      };
-    }, detour.level);
-    ok(stars.gold === 'gold', 'ステージ1（最短クリア）は金の星（' + stars.gold + '）');
-    ok(stars.blue === 'blue',
-      'ステージ' + (detour.level + 1) + '（遠回りクリア）は青い星（' + stars.blue + '）');
-    ok(stars.uncle === null, '未クリアのステージには星がつかない');
-    ok(stars.text === '★' && stars.corner === 'absolute', '星は★でボタンの角に重ねて表示される');
-    await p4.click('#btn-stage-close');
-
-    // 星はリロードしても残る
-    await p4.reload();
-    await leaveHome(p4);
-    await closeTutorial(p4);
-    await p4.click('#btn-stages');
-    const goldAfter = await p4.locator('.stage-btn .stage-star.gold').count();
-    ok(goldAfter >= 1, 'リロードしても星が残る（金 ' + goldAfter + ' 個）');
-    await ctx4.close();
-  }
-
   console.log('\n=== ホーム画面 ===');
   {
     const ctx5 = await browser.newContext({ viewport: { width: 900, height: 900 } });
@@ -725,13 +637,13 @@ const snapshot = (page) => page.evaluate(() => ({
       'クリア後は「つづきから」になる');
     ok((await p5.textContent('#home-continue-sub')).indexOf('STAGE 2') === 0,
       'つづきからは STAGE 2 を指す');
+    const window0 = meta;
     const stats = await p5.evaluate(() => ({
       cleared: document.getElementById('home-cleared').textContent,
-      gold: document.getElementById('home-gold').textContent,
-      blue: document.getElementById('home-blue').textContent
+      total: document.getElementById('home-total-stat').textContent
     }));
-    ok(stats.cleared === '1' && stats.gold === '1' && stats.blue === '0',
-      'ホームにクリア数と星の数が出る（クリア' + stats.cleared + ' 金' + stats.gold + ' 青' + stats.blue + '）');
+    ok(stats.cleared === '1' && stats.total === String(window0.n),
+      'ホームにクリア数が出る（' + stats.cleared + '/' + stats.total + '）');
 
     // つづきから → STAGE 2 が始まる
     await p5.click('#btn-home-continue');
@@ -764,12 +676,11 @@ const snapshot = (page) => page.evaluate(() => ({
     await p5.waitForTimeout(150);
     const afterReset = await p5.evaluate(([k]) => ({
       cleared: document.getElementById('home-cleared').textContent,
-      gold: document.getElementById('home-gold').textContent,
       label: document.getElementById('home-continue-label').textContent,
       sub: document.getElementById('home-continue-sub').textContent,
       stored: localStorage.getItem(k)
     }), [STORE_KEY]);
-    ok(afterReset.cleared === '0' && afterReset.gold === '0', '初期化するとクリア数と星が0に戻る');
+    ok(afterReset.cleared === '0', '初期化するとクリア数が0に戻る');
     ok(afterReset.label === 'はじめる' && afterReset.sub.indexOf('STAGE 1') === 0,
       '初期化後は STAGE 1 から「はじめる」になる');
     ok(JSON.parse(afterReset.stored).cleared.length === 0, '保存データも消える');
@@ -848,6 +759,16 @@ const snapshot = (page) => page.evaluate(() => ({
     ok(hdr.ctrls.map(c => c.label).join('/') === '1手もどす/やりなおし',
       '操作ボタンにもラベルが付いている（' + hdr.ctrls.map(c => c.label).join('/') + '）');
     ok(await page.locator('#btn-hint').count() === 0, 'ヒントボタンは削除されている');
+    const gone = await page.evaluate(() => ({
+      counters: document.querySelectorAll('.counters, .counter').length,
+      ids: ['move-count', 'par-count', 'bad-count', 'clear-star', 'home-gold', 'home-blue']
+        .filter(id => document.getElementById(id)),
+      stars: document.querySelectorAll('.stage-star, .clear-star').length,
+      text: document.body.textContent
+    }));
+    ok(gone.counters === 0 && gone.ids.length === 0,
+      '手数・最短・残り悪の表示が削除されている' + (gone.ids.length ? ' — 残: ' + gone.ids : ''));
+    ok(!/手数|最短|残り悪/.test(gone.text), '画面に「手数」「最短」「残り悪」の文字が出ない');
   }
 
   console.log('\n=== 横画面 ===');

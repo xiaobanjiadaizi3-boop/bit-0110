@@ -15,8 +15,6 @@
   --wall-a: #10151d;
   --wall-b: #1a212c;
   --scrim: #000000c4;      /* モーダルの背景 */
-  --star-blue: #5ab0ff;
-  --star-gold: #ffcf4d;
   --warn: #ffd66b;
   --home-glow: #17222f;
   --block-edge: transparent;
@@ -62,8 +60,6 @@
   --wall-a: #dde3ec;
   --wall-b: #cbd3e0;
   --scrim: #1b2734a6;
-  --star-blue: #1971c2;
-  --star-gold: #c98a00;
   --warn: #9a6b00;
   --home-glow: #ffffff;
   --block-edge: #00000022;
@@ -316,16 +312,6 @@ code {
 
 /* ---------- ステータス ---------- */
 .statusbar { text-align: center; }
-.counters {
-  display: flex;
-  justify-content: center;
-  gap: 16px;
-  font-size: 12px;
-  color: var(--muted);
-  font-family: ui-monospace, monospace;
-}
-.counter b { color: var(--text); font-size: 14px; }
-
 .preview {
   margin: 6px 0 0;
   min-height: 1.4em;
@@ -513,32 +499,6 @@ code {
 .stage-btn:disabled { opacity: .35; cursor: default; }
 .stage-btn.cleared { background: var(--surface-2); }
 .stage-btn.current { background: var(--surface-2); border-color: var(--accent); }
-
-/* クリア状況の星。青=クリア、金=最短手数でクリア */
-.stage-star {
-  position: absolute;
-  top: 1px;
-  right: 3px;
-  font-size: 9px;
-  line-height: 1;
-  pointer-events: none;
-}
-.stage-star.blue { color: var(--star-blue); }
-.stage-star.gold { color: var(--star-gold); }
-
-.clear-star {
-  font-size: 30px;
-  line-height: 1.2;
-  margin-top: 4px;
-  animation: starPop .5s cubic-bezier(.2, 1.6, .4, 1);
-}
-.clear-star.blue { color: var(--star-blue); }
-.clear-star.gold { color: var(--star-gold); }
-
-@keyframes starPop {
-  from { transform: scale(.2) rotate(-40deg); opacity: 0; }
-  to { transform: scale(1) rotate(0); opacity: 1; }
-}
 
 /* ---------- あそびかたメニュー ---------- */
 .chip {
@@ -1091,8 +1051,6 @@ code {
   font-family: ui-monospace, monospace;
 }
 .home-stat b { font-size: 18px; color: var(--text); }
-.home-stat-gold b { color: var(--star-gold); }
-.home-stat-blue b { color: var(--star-blue); }
 
 .home-menu { display: flex; flex-direction: column; gap: 10px; }
 .home-btn {
@@ -1234,8 +1192,8 @@ code {
   .layout {
     max-width: 100%;
     display: grid;
-    grid-template-columns: auto auto auto auto;
-    grid-template-areas: "head status board controls";
+    grid-template-columns: auto auto auto;
+    grid-template-areas: "head board controls";
     align-content: center;
     justify-content: center;
     align-items: center;
@@ -1247,19 +1205,16 @@ code {
      幅を1文字ぶんに絞って1文字ずつ折り返すことで、文字を正立させたまま
      縦に並べる。writing-mode の縦書きは環境によって漢字の字送りが崩れる
      ことがあるため、通常の横書きの行送りで組んでいる。 */
-  .stage-head, .statusbar {
+  .stage-head {
+    grid-area: head;
     display: flex;
-    flex-direction: row;
-    align-items: flex-start;
     justify-content: center;
-    gap: 12px;
     align-self: center;
     max-height: 84dvh;
   }
-  .stage-head { grid-area: head; }
-  .statusbar  { grid-area: status; }
+  .statusbar { grid-area: status; display: none; }
 
-  .stage-no, .counter {
+  .stage-no {
     width: 1em;
     word-break: break-all;
     white-space: normal;
@@ -1275,9 +1230,6 @@ code {
   .stage-word { display: none; }   /* 縦書きでは番号だけで十分 */
   .stage-of { font-size: 15px; }
   .world-name { display: block; margin: 8px 0 0; font-size: 13px; }
-  .counters { display: flex; flex-direction: row; gap: 12px; font-size: 13px; }
-  .counter { font-family: ui-monospace, monospace; }
-  .counter b { font-size: 14px; }
   .stage-tip, .preview { display: none; }
 
   .board-wrap { grid-area: board; align-self: center; }
@@ -1364,7 +1316,6 @@ code {
 @media (orientation: landscape) and (max-height: 430px) {
   :root { --cell-max: 104px; --gap: 7px; --chrome-w: 194px; --chrome-h: 68px; }
   .stage-no { font-size: 13px; }
-  .counters { gap: 11px; }
   .home-title { font-size: 22px; }
   .home-stats { margin: 8px 0 10px; }
   .tut-demo { margin-top: 6px; }
