@@ -15,6 +15,18 @@
 <meta name="apple-mobile-web-app-title" content="bit-0110">
 <meta name="mobile-web-app-capable" content="yes">
 <link rel="stylesheet" href="css/style.css">
+<script>
+/* テーマは描画前に当てる（切り替わりのチラつき防止） */
+(function () {
+  var m = 'auto';
+  try { m = localStorage.getItem('bit0110.theme') || 'auto'; } catch (e) {}
+  var light = m === 'light' || (m === 'auto' && window.matchMedia &&
+    matchMedia('(prefers-color-scheme: light)').matches);
+  var r = document.documentElement;
+  r.setAttribute('data-theme', light ? 'light' : 'dark');
+  r.setAttribute('data-theme-mode', m);
+})();
+</script>
 </head>
 <body>
 
@@ -29,6 +41,11 @@
     </button>
     <button id="btn-stages" class="icon-btn" type="button" title="ステージ選択" aria-label="ステージ選択">
       <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="7" height="7" rx="1.8"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.8"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.8"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.8"/></svg>
+    </button>
+    <button id="btn-theme" class="icon-btn" type="button" title="画面の明るさ" aria-label="画面の明るさ">
+      <svg class="ic-light" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.4v2.4M12 19.2v2.4M4.2 12H1.8M22.2 12h-2.4M6.5 6.5 4.8 4.8M19.2 19.2l-1.7-1.7M17.5 6.5l1.7-1.7M4.8 19.2l1.7-1.7"/></svg>
+      <svg class="ic-dark" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.4A8.4 8.4 0 0 1 9.6 4a8.4 8.4 0 1 0 10.4 10.4z"/></svg>
+      <svg class="ic-auto" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.6"/><path d="M12 3.4a8.6 8.6 0 0 1 0 17.2z" class="ic-fill"/></svg>
     </button>
   </div>
 </header>
@@ -55,9 +72,15 @@
   </section>
 
   <section class="controls">
-    <button id="btn-undo" class="btn" type="button">もどす</button>
-    <button id="btn-reset" class="btn" type="button">やりなおし</button>
-    <button id="btn-hint" class="btn" type="button">ヒント</button>
+    <button id="btn-undo" class="ctrl-btn" type="button" title="1手もどす" aria-label="1手もどす">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.8 9.6h10.4a5.2 5.2 0 0 1 0 10.4H8.6"/><path d="M7.8 5 3.4 9.6 7.8 14"/></svg>
+    </button>
+    <button id="btn-reset" class="ctrl-btn" type="button" title="やりなおし" aria-label="やりなおし">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.2 12a8.2 8.2 0 1 1-2.6-6"/><path d="M20.6 3.6v4.6h-4.6"/></svg>
+    </button>
+    <button id="btn-hint" class="ctrl-btn" type="button" title="ヒント" aria-label="ヒント">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.4 18.4h5.2M10.4 21.2h3.2"/><path d="M12 2.8a6.2 6.2 0 0 0-3.7 11.2c.6.5 1 1.2 1 2v.4h5.4v-.4c0-.8.4-1.5 1-2A6.2 6.2 0 0 0 12 2.8z"/></svg>
+    </button>
   </section>
 
 </main>
@@ -102,10 +125,13 @@
 <!-- チュートリアル -->
 <div id="tutorial-modal" class="modal" hidden>
   <div class="modal-card modal-card-tutorial">
-    <div id="tut-badge" class="tut-badge"></div>
-    <div id="tut-kicker" class="tut-kicker"></div>
-    <h3 id="tut-title" class="tut-title"></h3>
-    <div id="tut-demo" class="tut-demo"></div>
+    <div class="tut-left">
+      <div id="tut-badge" class="tut-badge"></div>
+      <div id="tut-kicker" class="tut-kicker"></div>
+      <h3 id="tut-title" class="tut-title"></h3>
+      <div id="tut-demo" class="tut-demo"></div>
+    </div>
+    <div class="tut-right">
     <p id="tut-text" class="tut-text"></p>
     <div class="tut-loopbar">
       <div id="tut-loop" class="tut-loop"><div id="tut-loop-fill" class="tut-loop-fill"></div></div>
@@ -118,6 +144,7 @@
       <button id="btn-tut-skip" class="btn btn-small" type="button">スキップ</button>
       <button id="btn-tut-prev" class="btn" type="button">もどる</button>
       <button id="btn-tut-next" class="btn btn-primary" type="button">次へ</button>
+    </div>
     </div>
   </div>
 </div>
@@ -155,7 +182,38 @@
     </div>
   </div>
 
+  <button id="btn-home-theme" class="home-theme" type="button" aria-label="画面の明るさ">
+    <svg class="ic-light" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.4v2.4M12 19.2v2.4M4.2 12H1.8M22.2 12h-2.4M6.5 6.5 4.8 4.8M19.2 19.2l-1.7-1.7M17.5 6.5l1.7-1.7M4.8 19.2l1.7-1.7"/></svg>
+    <svg class="ic-dark" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.4A8.4 8.4 0 0 1 9.6 4a8.4 8.4 0 1 0 10.4 10.4z"/></svg>
+    <svg class="ic-auto" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.6"/><path d="M12 3.4a8.6 8.6 0 0 1 0 17.2z" class="ic-fill"/></svg>
+    <span id="home-theme-name">自動</span>
+  </button>
   <button id="btn-reset-data" class="home-reset" type="button">データを初期化</button>
+</div>
+
+<!-- 画面の明るさ -->
+<div id="theme-modal" class="modal" hidden>
+  <div class="modal-card">
+    <h3 class="modal-title">画面の明るさ</h3>
+    <div class="theme-list">
+      <button class="theme-item" type="button" data-mode="light">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.4v2.4M12 19.2v2.4M4.2 12H1.8M22.2 12h-2.4M6.5 6.5 4.8 4.8M19.2 19.2l-1.7-1.7M17.5 6.5l1.7-1.7M4.8 19.2l1.7-1.7"/></svg>
+        <span class="theme-name">ライト</span>
+      </button>
+      <button class="theme-item" type="button" data-mode="dark">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.4A8.4 8.4 0 0 1 9.6 4a8.4 8.4 0 1 0 10.4 10.4z"/></svg>
+        <span class="theme-name">ダーク</span>
+      </button>
+      <button class="theme-item" type="button" data-mode="auto">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.6"/><path d="M12 3.4a8.6 8.6 0 0 1 0 17.2z" class="ic-fill"/></svg>
+        <span class="theme-name">自動</span>
+        <span class="theme-note">端末の設定に合わせる</span>
+      </button>
+    </div>
+    <div class="modal-actions">
+      <button id="btn-theme-close" class="btn btn-primary" type="button">とじる</button>
+    </div>
+  </div>
 </div>
 
 <!-- データ初期化の確認 -->

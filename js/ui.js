@@ -9,6 +9,7 @@
   var Tutorial = window.BitTutorial;
   var WORLDS = LEVELS.worlds || [{ tag: '', name: '', start: 0, count: LEVELS.length }];
   var STORE_KEY = 'bit0110.progress.v2';
+  var THEME_KEY = 'bit0110.theme';
   var ANIM_MS = 260;
 
   var G = {
@@ -482,6 +483,58 @@
     loadLevel(G.index);
   });
 
+  /* ---------------- 画面の明るさ（ライト / ダーク / 自動） ---------------- */
+  var systemLight = window.matchMedia && matchMedia('(prefers-color-scheme: light)');
+
+  function loadThemeMode() {
+    try {
+      var m = localStorage.getItem(THEME_KEY);
+      if (m === 'light' || m === 'dark' || m === 'auto') return m;
+    } catch (e) {}
+    return 'auto';
+  }
+
+  function applyTheme(mode) {
+    var light = mode === 'light' || (mode === 'auto' && systemLight && systemLight.matches);
+    var root = document.documentElement;
+    root.setAttribute('data-theme', light ? 'light' : 'dark');
+    root.setAttribute('data-theme-mode', mode);
+    var meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content', light ? '#eef1f6' : '#0d1117');
+    Array.prototype.forEach.call(document.querySelectorAll('.theme-item'), function (b) {
+      b.classList.toggle('active', b.dataset.mode === mode);
+      b.setAttribute('aria-pressed', b.dataset.mode === mode ? 'true' : 'false');
+    });
+    var NAMES = { light: 'ライト', dark: 'ダーク', auto: '自動' };
+    $('home-theme-name').textContent = NAMES[mode];
+  }
+
+  function setThemeMode(mode) {
+    try { localStorage.setItem(THEME_KEY, mode); } catch (e) {}
+    applyTheme(mode);
+  }
+
+  applyTheme(loadThemeMode());
+
+  // 「自動」のときは端末の設定変更に追従する
+  if (systemLight) {
+    var onSystemChange = function () {
+      if (loadThemeMode() === 'auto') applyTheme('auto');
+    };
+    if (systemLight.addEventListener) systemLight.addEventListener('change', onSystemChange);
+    else if (systemLight.addListener) systemLight.addListener(onSystemChange);
+  }
+
+  $('btn-theme').addEventListener('click', function () { $('theme-modal').hidden = false; });
+  $('btn-home-theme').addEventListener('click', function () { $('theme-modal').hidden = false; });
+  $('btn-theme-close').addEventListener('click', function () { $('theme-modal').hidden = true; });
+  $('theme-modal').addEventListener('click', function (ev) {
+    if (ev.target === this) this.hidden = true;
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('.theme-item'), function (b) {
+    b.addEventListener('click', function () { setThemeMode(b.dataset.mode); });
+  });
+
   /* ---------------- ホーム画面 ---------------- */
   function starCounts() {
     var gold = 0, blue = 0;
@@ -523,7 +576,7 @@
     try { localStorage.removeItem(STORE_KEY); } catch (e) {}
     progress = { cleared: [], last: 0, seenTutorials: [], best: {} };
     saveProgress(progress);
-    $('reset-modal').hidden = true;
+    $('reset-modal').hidden = true;   // 画面の明るさの設定は消さない
     loadLevel(0, true);      // 盤面もステージ1に戻す
     showHome();
   });
@@ -615,6 +668,7 @@
       if (!$('stage-modal').hidden) closeStageModal();
       $('help-modal').hidden = true;
       $('reset-modal').hidden = true;
+      $('theme-modal').hidden = true;
       clearSelection();
     } else if (ev.key === 'z' && (ev.ctrlKey || ev.metaKey)) {
       ev.preventDefault();

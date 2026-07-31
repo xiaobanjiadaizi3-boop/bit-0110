@@ -837,15 +837,24 @@ const snapshot = (page) => page.evaluate(() => ({
         // すべて同じ高さ＝折り返していない
         oneLine: new Set(btns.map(b => Math.round(b.getBoundingClientRect().top))).size === 1,
         barH: Math.round(bar.height),
-        stageName: !!document.getElementById('stage-name')
+        stageName: !!document.getElementById('stage-name'),
+        ctrls: [...document.querySelectorAll('.controls .ctrl-btn')].map(b => ({
+          label: b.getAttribute('aria-label'),
+          svg: !!b.querySelector('svg'),
+          text: b.textContent.trim()
+        }))
       };
     });
-    ok(hdr.count === 3 && hdr.svgs === 3 && hdr.noText,
-      'ヘッダーの3ボタンがアイコンになっている');
-    ok(hdr.labels.join('/') === 'ホーム/あそびかた/ステージ選択',
+    ok(hdr.count === 4 && hdr.svgs === 4 && hdr.noText,
+      'ヘッダーの4ボタンがアイコンになっている');
+    ok(hdr.labels.join('/') === 'ホーム/あそびかた/ステージ選択/画面の明るさ',
       '読み上げ用のラベルが付いている（' + hdr.labels.join('/') + '）');
     ok(hdr.oneLine, 'ヘッダーのボタンが折り返さず1行に収まる');
     ok(!hdr.stageName, 'ステージ名の表示は削除されている');
+    ok(hdr.ctrls.length === 3 && hdr.ctrls.every(c => c.svg && c.text === ''),
+      'もどす・やりなおし・ヒントもアイコンになっている');
+    ok(hdr.ctrls.map(c => c.label).join('/') === '1手もどす/やりなおし/ヒント',
+      '操作ボタンにもラベルが付いている（' + hdr.ctrls.map(c => c.label).join('/') + '）');
   }
 
   console.log('\n=== 横画面 ===');
@@ -869,20 +878,30 @@ const snapshot = (page) => page.evaluate(() => ({
     await closeTutorial(p6);
 
     const land = await p6.evaluate(() => {
-      const b = document.querySelector('.board').getBoundingClientRect();
-      const h = document.querySelector('.stage-head').getBoundingClientRect();
+      const r = s => document.querySelector(s).getBoundingClientRect();
+      const b = r('.board'), head = r('.stage-head'), st = r('.statusbar'),
+            ct = r('.controls'), bar = r('.topbar');
       return {
         hScroll: document.documentElement.scrollWidth > window.innerWidth + 1,
         vScroll: document.documentElement.scrollHeight > window.innerHeight + 2,
         boardFits: b.bottom <= window.innerHeight + 1 && b.top >= 0,
-        sideBySide: h.left > b.right - 2,   // 盤面の右に情報が並ぶ
+        menuOnTop: bar.bottom <= b.top + 1,
+        infoLeft: head.right <= b.left + 1 && st.right <= b.left + 1,
+        ctrlRight: ct.left >= b.right - 1,
+        ctrlStacked: (() => {
+          const bs = [...document.querySelectorAll('.controls .ctrl-btn')]
+            .map(e => e.getBoundingClientRect());
+          return bs.every((x, i) => i === 0 || x.top > bs[i - 1].top);
+        })(),
         boardH: Math.round(b.height), winH: window.innerHeight
       };
     });
     ok(!land.hScroll, '横画面の盤面で横スクロールが出ない');
     ok(!land.vScroll, '横画面で縦スクロールも出ない');
     ok(land.boardFits, '盤面が画面内に収まる（高さ' + land.boardH + '/' + land.winH + '）');
-    ok(land.sideBySide, '横画面では盤面の横に情報が並ぶ');
+    ok(land.menuOnTop, '横画面でもメニューは上にある');
+    ok(land.infoLeft, 'ステージ情報が盤面の左に並ぶ');
+    ok(land.ctrlRight && land.ctrlStacked, '操作ボタンが盤面の右に縦に並ぶ');
 
     // 横画面でも遊べる
     const h6 = await p6.evaluate(() => window.BitCore.hint(window.BitGame.state));
@@ -903,12 +922,150 @@ const snapshot = (page) => page.evaluate(() => ({
     await p6.click('#btn-help');
     await p6.click('#help-list [data-tut="AND"]');
     await p6.waitForTimeout(200);
-    ok(await p6.evaluate(() => {
-      const c = document.querySelector('.modal-card-tutorial').getBoundingClientRect();
-      return c.top >= -1 && c.bottom <= window.innerHeight + 1;
-    }), '横画面でもチュートリアルが画面に収まる');
+    const tut6 = await p6.evaluate(() => {
+      const card = document.querySelector('.modal-card-tutorial');
+      const c = card.getBoundingClientRect();
+      const l = document.querySelector('.tut-left').getBoundingClientRect();
+      const rr = document.querySelector('.tut-right').getBoundingClientRect();
+      return {
+        fits: c.top >= -1 && c.bottom <= window.innerHeight + 1,
+        noScroll: card.scrollHeight <= card.clientHeight + 1,
+        twoCol: rr.left >= l.right - 1,
+        h: Math.round(c.height), winH: window.innerHeight
+      };
+    });
+    ok(tut6.fits, '横画面でもチュートリアルが画面に収まる（高さ' + tut6.h + '/' + tut6.winH + '）');
+    ok(tut6.noScroll, '横画面のチュートリアルでスクロールが要らない');
+    ok(tut6.twoCol, '横画面のチュートリアルは左右2カラムになる');
+    await p6.click('#btn-tut-skip');
     ok(err6.length === 0, '横画面でエラーが出ない');
     await ctx6.close();
+  }
+
+  console.log('\n=== ライト / ダーク / 自動 ===');
+  {
+    const ctx7 = await browser.newContext({ viewport: { width: 500, height: 900 },
+      colorScheme: 'dark' });
+    const p7 = await ctx7.newPage();
+    await p7.goto(base);
+
+    const initial = await p7.evaluate(() => document.documentElement.dataset.theme);
+    ok(initial === 'dark', '端末がダークなら自動でダークになる（' + initial + '）');
+    ok(await p7.evaluate(() => document.documentElement.dataset.themeMode === 'auto'),
+      '初期状態は「自動」');
+
+    // ホーム画面からも切り替えられる
+    ok(await p7.locator('#btn-home-theme').isVisible(), 'ホーム画面にも明るさの切り替えがある');
+    await p7.click('#btn-home-theme');
+    await p7.waitForTimeout(100);
+    const items = await p7.evaluate(() => [...document.querySelectorAll('.theme-item')]
+      .map(b => ({ mode: b.dataset.mode, name: b.querySelector('.theme-name').textContent,
+                   svg: !!b.querySelector('svg') })));
+    ok(items.length === 3 && items.every(i => i.svg),
+      '3つの選択肢がアイコン付きで並ぶ');
+    ok(items.map(i => i.name).join('/') === 'ライト/ダーク/自動',
+      'ライト・ダーク・自動が選べる（' + items.map(i => i.name).join('/') + '）');
+    ok(await p7.locator('.theme-item[data-mode="auto"].active').count() === 1,
+      '現在のモードに印が付く');
+
+    // ライトに切り替え
+    await p7.click('.theme-item[data-mode="light"]');
+    await p7.waitForTimeout(100);
+    const light = await p7.evaluate(() => ({
+      theme: document.documentElement.dataset.theme,
+      mode: document.documentElement.dataset.themeMode,
+      bg: getComputedStyle(document.body).backgroundColor,
+      text: getComputedStyle(document.body).color,
+      meta: document.querySelector('meta[name="theme-color"]').content
+    }));
+    ok(light.theme === 'light' && light.mode === 'light', 'ライトに切り替わる');
+    ok(light.bg === 'rgb(238, 241, 246)', '背景が明るくなる（' + light.bg + '）');
+    ok(light.text === 'rgb(22, 32, 43)', '文字が濃くなる（' + light.text + '）');
+    ok(light.meta === '#eef1f6', 'ブラウザのテーマ色も切り替わる');
+
+    // ダークに切り替え
+    await p7.click('.theme-item[data-mode="dark"]');
+    await p7.waitForTimeout(100);
+    ok(await p7.evaluate(() => getComputedStyle(document.body).backgroundColor) === 'rgb(13, 17, 23)',
+      'ダークに切り替わる');
+
+    // 選択はリロード後も残る
+    await p7.click('.theme-item[data-mode="light"]');
+    await p7.click('#btn-theme-close');
+    await p7.reload();
+    await p7.waitForTimeout(120);
+    ok(await p7.evaluate(() => document.documentElement.dataset.theme) === 'light',
+      'リロードしても選んだテーマが残る');
+
+    // 自動に戻すと端末の設定に従う
+    await p7.click('#btn-home-theme');
+    await p7.click('.theme-item[data-mode="auto"]');
+    await p7.waitForTimeout(100);
+    ok(await p7.evaluate(() => document.documentElement.dataset.theme) === 'dark',
+      '「自動」でダーク端末に追従する');
+    await p7.emulateMedia({ colorScheme: 'light' });
+    await p7.waitForTimeout(150);
+    ok(await p7.evaluate(() => document.documentElement.dataset.theme) === 'light',
+      '「自動」中に端末側が明るくなると追従する');
+
+    // ライトでもちゃんと遊べる
+    await p7.click('#btn-theme-close');
+    await leaveHome(p7);
+    await closeTutorial(p7);
+    const h7 = await p7.evaluate(() => window.BitCore.hint(window.BitGame.state));
+    await p7.click(`#board .block[data-id="${h7.srcId}"]`);
+    await p7.click(`#board .block[data-id="${h7.dstId}"]`);
+    await p7.waitForSelector('#clear-modal:not([hidden])', { timeout: 3000 });
+    ok(true, 'ライトモードでもステージをクリアできる');
+    await ctx7.close();
+  }
+
+  console.log('\n=== ORブロックのbitの見やすさ ===');
+  {
+    const contrast = await page.evaluate(() => {
+      // 表示色から相対輝度を出してコントラスト比を計算する
+      const lum = c => {
+        const v = c.match(/[\d.]+/g).slice(0, 3).map(n => {
+          n = n / 255;
+          return n <= 0.03928 ? n / 12.92 : Math.pow((n + 0.055) / 1.055, 2.4);
+        });
+        return 0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2];
+      };
+      const ratio = (a, b) => {
+        const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p);
+        return (x + 0.05) / (y + 0.05);
+      };
+      // 3種それぞれが出るステージを開いて調べる
+      const out = {};
+      for (const t of ['or', 'and', 'xor']) {
+        const L = window.BitLevels;
+        const idx = L.findIndex(l => l.blocks.some(b => b.type === t &&
+          /0/.test(b.bits) && /1/.test(b.bits)));
+        if (idx < 0) continue;
+        window.BitGame.loadLevel(idx);
+        const blk = document.querySelector('#board .block-' + t);
+        if (!blk) continue;
+        const zero = blk.querySelector('.bit-0'), one = blk.querySelector('.bit-1');
+        if (!zero || !one) continue;
+        const zs = getComputedStyle(zero), os = getComputedStyle(one);
+        out[t] = {
+          zero: +ratio(zs.color, zs.backgroundColor).toFixed(2),
+          one: +ratio(os.color, os.backgroundColor).toFixed(2),
+          // 0のマスと1のマスの地の色が十分違うか
+          split: +ratio(zs.backgroundColor, os.backgroundColor).toFixed(2)
+        };
+      }
+      return out;
+    });
+    for (const [t, c] of Object.entries(contrast)) {
+      ok(c.zero >= 4.5 && c.one >= 4.5,
+        t.toUpperCase() + 'ブロックの数字が読める（0: ' + c.zero + ':1 / 1: ' + c.one + ':1）');
+      ok(c.split >= 3,
+        t.toUpperCase() + 'ブロックの0と1が見分けられる（地の差 ' + c.split + ':1）');
+    }
+    ok(Object.keys(contrast).length === 3,
+      'OR・AND・XOR の3種すべてを検査できた（' + Object.keys(contrast).join('/') + '）');
+    await closeTutorial(page);
   }
 
   console.log('\n=== アプリアイコン ===');
