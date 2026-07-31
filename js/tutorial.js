@@ -129,15 +129,19 @@
   var MENU_ORDER = ['INTRO', 'OR', 'NOT', 'AND', 'XOR'];
 
   // すべてのデモはこの周期でぴったり繰り返す（見せ終わってから少し余韻を置く）
-  var CYCLE = 3600;
+  var CYCLE = 4400;
 
-  /* ステージ番号 → そこで出すチュートリアルのキー配列 */
-  function keyForStage(levels, worlds, index) {
-    for (var i = 0; i < worlds.length; i++) {
-      if (worlds[i].start !== index) continue;
-      return i === 0 ? ['INTRO', 'OR'] : [worlds[i].tag];
-    }
-    return [];
+  /* そのステージで出すべきチュートリアルのキー配列。
+   * ワールドの区切りではなく「盤面にそのブロックが実際に出てきたか」で決めるので、
+   * ステージ選択で飛んだ先でも、初めて見るブロックの説明がきちんと出る。 */
+  var BLOCK_KEYS = ['OR', 'NOT', 'AND', 'XOR'];
+
+  function keysForLevel(level) {
+    var keys = ['INTRO'];
+    var present = {};
+    level.blocks.forEach(function (b) { present[b.type] = true; });
+    BLOCK_KEYS.forEach(function (k) { if (present[k.toLowerCase()]) keys.push(k); });
+    return keys;
   }
 
   /* ---------------- ミニブロックの描画 ---------------- */
@@ -168,6 +172,82 @@
     var m = [];
     for (var i = 0; i < a.length; i++) m.push(a[i] !== b[i]);
     return m;
+  }
+
+  /* ---------------- 「動かす / 重ねる先 / 結果」のスロット ---------------- */
+  function addSign(stage, text) {
+    var el = document.createElement('div');
+    el.className = 'demo-sign';
+    el.textContent = text;
+    stage.appendChild(el);
+    return el;
+  }
+
+  function makeSlot(stage, labelText, role) {
+    var wrap = document.createElement('div');
+    wrap.className = 'demo-slot' + (role ? ' demo-slot-' + role : '');
+    var box = document.createElement('div');
+    box.className = 'demo-slot-box';
+    var label = document.createElement('span');
+    label.className = 'demo-slot-label';
+    label.textContent = labelText;
+    wrap.appendChild(box);
+    wrap.appendChild(label);
+    stage.appendChild(wrap);
+
+    var api = {
+      inner: function () { return box.firstChild || box; },
+      setBlock: function (node, pop) {
+        box.className = 'demo-slot-box';
+        box.innerHTML = '';
+        if (!node) return;
+        if (pop) node.classList.add('demo-pop');
+        box.appendChild(node);
+      },
+      // 空きマス（移動先）
+      setEmptyCell: function () {
+        box.className = 'demo-slot-box';
+        box.innerHTML = '<div class="cell demo-cell"></div>';
+      },
+      // 結果待ち
+      setPending: function () {
+        box.className = 'demo-slot-box demo-slot-pending';
+        box.innerHTML = '<span class="demo-qmark">?</span>';
+        label.textContent = labelText;
+        label.className = 'demo-slot-label';
+      },
+      // 使って消えたブロック。何を使ったのか分かるよう薄く残す。
+      setSpent: function (node, text) {
+        box.className = 'demo-slot-box demo-slot-spent';
+        box.innerHTML = '';
+        if (node) box.appendChild(node);
+        label.textContent = text;
+        label.className = 'demo-slot-label demo-slot-label-spent';
+      },
+      // 出ていって空になったマス
+      setGone: function (text) {
+        box.className = 'demo-slot-box demo-slot-gone';
+        box.innerHTML = '<span class="demo-gone-mark">' + text + '</span>';
+      },
+      setLabel: function (text, cls) {
+        label.textContent = text;
+        label.className = 'demo-slot-label' + (cls ? ' demo-slot-label-' + cls : '');
+      },
+      setForbidden: function () {
+        box.className = 'demo-slot-box demo-slot-forbidden';
+        box.innerHTML = '<span class="demo-ng-mark">×</span>';
+        label.textContent = '重ねられない';
+        label.className = 'demo-slot-label demo-slot-label-ng';
+      },
+      warn: function (text) {
+        label.textContent = text;
+        label.className = 'demo-slot-label demo-slot-label-warn';
+      },
+      dim: function (on) { box.classList.toggle('demo-slot-dim', on); },
+      highlight: function (on) { box.classList.toggle('demo-slot-hot', on); },
+      reject: function (on) { box.classList.toggle('demo-slot-no', on); }
+    };
+    return api;
   }
 
   /* ---------------- ドラッグ演出の共通部品 ----------------
@@ -300,73 +380,59 @@
 
     /* --- 空きマスへドラッグして移動 --- */
     if (demo.kind === 'move') {
-      stage.classList.add('demo-stage-move');
-      var cellA = document.createElement('div');
-      cellA.className = 'cell demo-cell';
-      var cellB = document.createElement('div');
-      cellB.className = 'cell demo-cell';
-      var mv = miniBlock(demo.src);
-      mv.classList.add('demo-floating');
-      stage.appendChild(cellA);
-      stage.appendChild(cellB);
-      stage.appendChild(mv);
+      stage.classList.add('demo-stage-formula');
+      var fromSlot = makeSlot(stage, 'いまここ', 'src');
+      addSign(stage, '→');
+      var toSlot = makeSlot(stage, 'ここへ動かす', 'dst');
+      fromSlot.setBlock(miniBlock(demo.src));
+      toSlot.setEmptyCell();
       var mrig = makeDragRig(stage);
 
-      var placeMv = function () {
-        mv.style.left = cellA.offsetLeft + 'px';
-        mv.style.top = cellA.offsetTop + 'px';
-      };
       if (reduced) {
-        placeMv();
-        cellB.classList.add('demo-cell-target');
+        fromSlot.setGone('動かした');
+        toSlot.setBlock(miniBlock(demo.src));
         return { play: noop, stop: clear, restart: noop, cycle: 0 };
       }
+
       var moveLoop = function () {
         clear();
-        placeMv();
-        mv.classList.remove('demo-dragging');
-        cellB.classList.remove('demo-cell-target');
+        fromSlot.setBlock(miniBlock(demo.src));
+        toSlot.setEmptyCell();
         mrig.reset();
-        mrig.anchor(mv, demo.src);
-        var dx = function () { return cellB.offsetLeft - cellA.offsetLeft; };
+        mrig.anchor(fromSlot.inner(), demo.src);
+        var mdx = function () { return toSlot.inner().offsetLeft - fromSlot.inner().offsetLeft; };
 
-        t(350, function () { mrig.grab(); mv.classList.add('demo-dragging'); });
-        t(700, function () { mrig.moveBy(dx() * 0.5, -16); });
-        // 少し上にずらして持つ。移動先のマスが隠れないようにするため
-        t(1050, function () { mrig.moveBy(dx() - 8, -12); cellB.classList.add('demo-cell-target'); });
-        t(1450, function () {
+        t(500, function () { mrig.grab(); fromSlot.dim(true); });
+        t(900, function () { mrig.moveBy(mdx() * 0.5, -20); });
+        t(1300, function () { mrig.moveBy(mdx() - 8, -12); toSlot.highlight(true); });
+        t(1800, function () {
           mrig.drop();
-          mv.classList.remove('demo-dragging');
-          mv.style.left = cellB.offsetLeft + 'px';
-          cellB.classList.remove('demo-cell-target');
+          mrig.hide();
+          fromSlot.setGone('空いた');
+          toSlot.setBlock(miniBlock(demo.src), true);
+          toSlot.highlight(false);
         });
-        t(1600, mrig.hide);
         t(CYCLE, moveLoop);
       };
       return { play: moveLoop, stop: clear, restart: moveLoop, cycle: CYCLE };
     }
 
-    /* --- 重ねる（apply / forbid） --- */
-    var srcEl = miniBlock(demo.src);
-    srcEl.classList.add('demo-src');
-    var arrow = document.createElement('div');
-    arrow.className = 'demo-arrow';
-    arrow.textContent = '▶';
-    var dstEl = miniBlock(demo.dst);
-    dstEl.classList.add('demo-dst');
-    stage.appendChild(srcEl);
-    stage.appendChild(arrow);
-    stage.appendChild(dstEl);
+    /* --- 重ねる（apply / forbid） ---
+     * 「動かす」「重ねる先」「結果」を3つ並べたまま演出する。
+     * アニメーションが終わったあとも式がそのまま残るので、
+     * どのブロックを何に重ねて何になったのかが、いつ見ても分かる。 */
+    stage.classList.add('demo-stage-formula');
+    var forbidden = demo.kind === 'forbid';
+
+    var srcSlot = makeSlot(stage, '動かす', 'src');
+    addSign(stage, '+');
+    var dstSlot = makeSlot(stage, '重ねる先', 'dst');
+    var eqSign = addSign(stage, '=');
+    var resSlot = makeSlot(stage, '結果', 'res');
     var rig = makeDragRig(stage);
 
-    var badge = document.createElement('div');
-    badge.className = 'demo-badge';
-    host.appendChild(badge);
-
-    var forbidden = demo.kind === 'forbid';
     var beforeStr = demo.dst.bits || '';
     var afterStr = '', changed = null, defeated = false, unchanged = false;
-
     if (!forbidden) {
       var srcBits = demo.src.bits === undefined ? null : parseInt(demo.src.bits, 2);
       var dstBits = parseInt(demo.dst.bits, 2);
@@ -377,81 +443,75 @@
       unchanged = after === dstBits;
     }
 
-    var dx = function () { return dstEl.offsetLeft - srcEl.offsetLeft; };
+    // 結果スロットの中身
+    function resultNode() {
+      if (forbidden) return null;
+      if (defeated) {
+        var box = document.createElement('div');
+        box.className = 'demo-defeat';
+        box.innerHTML = bitsHTML(afterStr) + '<span class="demo-defeat-tag">撃破！</span>';
+        return box;
+      }
+      var el = miniBlock({ type: demo.dst.type, bits: afterStr });
+      setBits(el, afterStr, changed);
+      return el;
+    }
 
-    var reset = function () {
-      srcEl.className = 'block block-' + demo.src.type + ' demo-block demo-src';
-      dstEl.className = 'block block-' + demo.dst.type + ' demo-block demo-dst';
-      if (!forbidden) setBits(dstEl, beforeStr, null);
-      badge.className = 'demo-badge';
-      badge.textContent = '';
+    var setStart = function () {
+      srcSlot.setBlock(miniBlock(demo.src));
+      srcSlot.setLabel('動かす');
+      dstSlot.setBlock(miniBlock(demo.dst));
+      dstSlot.setLabel('重ねる先');
+      resSlot.setPending();
+      eqSign.textContent = forbidden ? '=' : '=';
       rig.reset();
-      rig.anchor(srcEl, demo.src);
+      rig.anchor(srcSlot.inner(), demo.src);
     };
 
     if (reduced) {
-      reset();
-      if (!forbidden) {
-        setBits(dstEl, afterStr, changed);
-        srcEl.classList.add('demo-gone');
-        badge.textContent = defeated ? '撃破！' : unchanged ? '変化なし' : beforeStr + ' → ' + afterStr;
-        badge.classList.add('show', defeated ? 'ok' : unchanged ? 'warn' : 'ok');
-      } else {
-        dstEl.classList.add('demo-no');
-        badge.textContent = 'このブロックには重ねられない';
-        badge.classList.add('show', 'ng');
+      setStart();
+      if (forbidden) { dstSlot.reject(true); resSlot.setForbidden(); }
+      else {
+        srcSlot.setSpent(miniBlock(demo.src), '使って消えた');
+        dstSlot.setBlock(miniBlock({ type: demo.dst.type, bits: afterStr }));
+        dstSlot.setLabel(beforeStr + ' → ' + afterStr, 'hot');
+        resSlot.setBlock(resultNode());
       }
       return { play: noop, stop: clear, restart: noop, cycle: 0 };
     }
 
     var loop = function () {
       clear();
-      reset();
+      setStart();
+      var adx = function () { return dstSlot.inner().offsetLeft - srcSlot.inner().offsetLeft; };
 
-      // つかむ
-      t(350, function () {
-        rig.grab();
-        srcEl.classList.add('demo-dragging');
-      });
-      // 持ち上げて弧を描いて運ぶ
-      t(700, function () { rig.moveBy(dx() * 0.5, -18); });
-      // 対象の少し上でホバーさせる。真上に重ねると対象が完全に隠れてしまうため
-      t(1050, function () {
-        rig.moveBy(forbidden ? dx() - 16 : dx() - 10, -12);
-        dstEl.classList.add(forbidden ? 'demo-no' : 'demo-target-ok');
+      t(500, function () { rig.grab(); srcSlot.dim(true); });
+      t(900, function () { rig.moveBy(adx() * 0.5, -20); });
+      t(1300, function () {
+        rig.moveBy(forbidden ? adx() - 18 : adx() - 10, -12);
+        if (forbidden) dstSlot.reject(true); else dstSlot.highlight(true);
       });
 
       if (forbidden) {
-        // 受け付けないので、つかんだまま元の位置へ戻る
-        t(1550, function () {
-          rig.moveBy(0, 0);
-          badge.textContent = 'このブロックには重ねられない';
-          badge.classList.add('show', 'ng');
-        });
-        t(2050, function () {
-          rig.hide();
-          srcEl.classList.remove('demo-dragging');
-        });
+        t(1800, function () { rig.moveBy(0, 0); resSlot.setForbidden(); });
+        t(2300, function () { rig.hide(); srcSlot.dim(false); });
         t(CYCLE, loop);
         return;
       }
 
-      // 落として演算
-      t(1450, function () {
+      t(1800, function () {
         rig.drop();
-        srcEl.classList.remove('demo-dragging');
-        srcEl.classList.add('demo-consumed');
-        dstEl.classList.remove('demo-target-ok');
-        setBits(dstEl, afterStr, changed);
-        dstEl.classList.add('demo-hit');
+        rig.hide();
+        srcSlot.setSpent(miniBlock(demo.src), '使って消えた');
+        dstSlot.highlight(false);
+        var changedBlock = miniBlock({ type: demo.dst.type, bits: afterStr });
+        setBits(changedBlock, afterStr, changed);
+        dstSlot.setBlock(changedBlock, true);
+        dstSlot.setLabel(beforeStr + ' → ' + afterStr, unchanged ? 'warn' : 'hot');
       });
-      t(1620, rig.hide);
-      t(2000, function () {
-        if (defeated) dstEl.classList.add('demo-vanish');
-        badge.textContent = defeated ? '撃破！'
-          : unchanged ? '変化なし — ブロックだけ失った'
-          : beforeStr + ' → ' + afterStr;
-        badge.classList.add('show', defeated ? 'ok' : unchanged ? 'warn' : 'ok');
+      t(2250, function () {
+        resSlot.setBlock(resultNode(), true);
+        if (unchanged) resSlot.warn('変化なし');
       });
       t(CYCLE, loop);
     };
@@ -601,7 +661,8 @@
   return {
     TUTORIALS: TUTORIALS,
     MENU_ORDER: MENU_ORDER,
-    keyForStage: keyForStage,
+    keysForLevel: keysForLevel,
+    BLOCK_KEYS: BLOCK_KEYS,
     buildMenu: buildMenu,
     init: init,
     open: open,

@@ -390,7 +390,8 @@
   });
 
   /* ---------------- ステージ制御 ---------------- */
-  function loadLevel(i) {
+  function loadLevel(i, silent) {
+    $('home-screen').hidden = true;
     G.index = i;
     G.level = LEVELS[i];
     G.state = Core.createState(G.level);
@@ -410,13 +411,13 @@
     render();
     progress.last = i;
     saveProgress(progress);
-    maybeTutorial(i);
+    if (!silent) maybeTutorial(i);
   }
 
-  /* 新しいブロックが解禁されるステージに来たら、まだ見ていないものを順に出す */
+  /* そのステージに初めて出てくるブロックのチュートリアルを順に出す */
   function maybeTutorial(i) {
     if (!Tutorial) return;
-    var pending = Tutorial.keyForStage(LEVELS, WORLDS, i).filter(function (k) {
+    var pending = Tutorial.keysForLevel(LEVELS[i]).filter(function (k) {
       return progress.seenTutorials.indexOf(k) === -1;
     });
     if (!pending.length) return;
@@ -454,6 +455,7 @@
 
   function closeStageModal() {
     $('stage-modal').hidden = true;
+    if (!$('home-screen').hidden) return;   // ホームから開いた場合はホームのまま
     if (isStuckNow()) $('over-modal').hidden = false;
   }
 
@@ -480,6 +482,40 @@
     $('clear-modal').hidden = true;
     loadLevel(G.index);
   });
+
+  /* ---------------- ホーム画面 ---------------- */
+  function starCounts() {
+    var gold = 0, blue = 0;
+    progress.cleared.forEach(function (i) {
+      if (starFor(i) === 'gold') gold++; else blue++;
+    });
+    return { gold: gold, blue: blue };
+  }
+
+  function showHome() {
+    var n = starCounts();
+    var resume = isUnlocked(progress.last) ? progress.last : 0;
+    $('home-total').textContent = LEVELS.length;
+    $('home-cleared').textContent = progress.cleared.length;
+    $('home-gold').textContent = n.gold;
+    $('home-blue').textContent = n.blue;
+    $('home-continue-label').textContent = progress.cleared.length ? 'つづきから' : 'はじめる';
+    $('home-continue-sub').textContent = 'STAGE ' + (resume + 1) + ' — ' + LEVELS[resume].name;
+    $('clear-modal').hidden = true;
+    $('over-modal').hidden = true;
+    $('stage-modal').hidden = true;
+    $('home-screen').hidden = false;
+  }
+
+  $('btn-home').addEventListener('click', showHome);
+  $('btn-home-continue').addEventListener('click', function () {
+    loadLevel(isUnlocked(progress.last) ? progress.last : 0);
+  });
+  $('btn-home-stages').addEventListener('click', function () {
+    renderStageList();
+    $('stage-modal').hidden = false;
+  });
+  $('btn-home-help').addEventListener('click', function () { $('help-modal').hidden = false; });
 
   /* クリア状況に応じた星。最短手数なら金、それ以外のクリアは青。 */
   function starFor(i) {
@@ -577,8 +613,9 @@
   window.BitGame = G;
   window.BitGame.loadLevel = loadLevel;
 
-  /* 起動 */
+  /* 起動: 盤面を用意したうえでホーム画面を出す
+   * （チュートリアルはホームを抜けて実際に遊び始めてから出す） */
   Tutorial.init();
-  var startAt = isUnlocked(progress.last) ? progress.last : 0;
-  loadLevel(startAt);   // 新ブロック解禁のステージならチュートリアルが開く
+  loadLevel(isUnlocked(progress.last) ? progress.last : 0, true);
+  showHome();
 })();

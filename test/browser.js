@@ -79,6 +79,14 @@ async function closeTutorial(page) {
   throw new Error('チュートリアルが閉じられない');
 }
 
+// 起動直後はホーム画面が出る
+async function leaveHome(page) {
+  if (await page.locator('#home-screen').isVisible()) {
+    await page.click('#btn-home-continue');
+    await page.waitForTimeout(80);
+  }
+}
+
 async function closeOver(page) {
   if (await page.locator('#over-modal').isVisible()) await page.click('#btn-over-retry');
 }
@@ -112,6 +120,7 @@ const snapshot = (page) => page.evaluate(() => ({
   page.on('pageerror', e => errors.push(String(e)));
 
   await page.goto(base);
+  await leaveHome(page);
   await closeTutorial(page);
 
   const meta = await page.evaluate(() => ({
@@ -308,6 +317,7 @@ const snapshot = (page) => page.evaluate(() => ({
     p3.on('pageerror', e => tutErrors.push(String(e)));
     p3.on('console', m => { if (m.type() === 'error') tutErrors.push(m.text()); });
     await p3.goto(base);
+    await leaveHome(p3);
 
     ok(await p3.locator('#tutorial-modal').isVisible(), '初回起動でチュートリアルが出る');
     ok(!(await p3.locator('#help-modal').isVisible()), '文章だけのルール説明は出ない');
@@ -350,10 +360,20 @@ const snapshot = (page) => page.evaluate(() => ({
     // 一度見たら再表示されない
     await p3.reload();
     await p3.waitForTimeout(150);
+    await leaveHome(p3);
     ok(!(await p3.locator('#tutorial-modal').isVisible()), '一度見たチュートリアルは再表示されない');
 
-    // 新ブロック解禁のステージでそれぞれ出る
-    for (const w of meta.worlds.slice(1)) {
+    // ブロックが初めて盤面に出たタイミングで、そのブロックの説明が出る
+    for (const tag of ['NOT', 'AND', 'XOR']) {
+      // そのブロックを含む最初のステージ（ワールドの頭とは限らない）
+      const first = await p3.evaluate((t) => {
+        const L = window.BitLevels;
+        for (let i = 0; i < L.length; i++) {
+          if (L[i].blocks.some(b => b.type === t.toLowerCase())) return i;
+        }
+        return -1;
+      }, tag);
+
       await p3.evaluate(([k, n]) => {
         const p = JSON.parse(localStorage.getItem(k));
         p.cleared = Array.from({ length: n }, (_, i) => i);
@@ -361,19 +381,50 @@ const snapshot = (page) => page.evaluate(() => ({
       }, [STORE_KEY, meta.n]);
       await p3.reload();
       await p3.waitForTimeout(100);
+      await leaveHome(p3);
       await closeTutorial(p3);
-      await p3.evaluate(n => window.BitGame.loadLevel(n), w.start);
+
+      // 1つ手前のステージでは、まだそのブロックは出ない
+      await p3.evaluate(n => window.BitGame.loadLevel(n), Math.max(0, first - 1));
+      await p3.waitForTimeout(100);
+      const shownEarly = await p3.locator('#tutorial-modal').isVisible();
+      await closeTutorial(p3);
+
+      await p3.evaluate(n => window.BitGame.loadLevel(n), first);
       await p3.waitForTimeout(120);
       const shown = await p3.locator('#tutorial-modal').isVisible();
-      const badge = shown ? await p3.textContent('#tut-badge') : '';
-      const title = shown ? await p3.textContent('#tut-kicker') : '';
-      ok(shown && badge === 'NEW BLOCK' && title.indexOf(w.tag) !== -1,
-        `ステージ${w.start + 1}（${w.name}の先頭）で ${w.tag} のチュートリアルが出る`);
+      const kicker = shown ? await p3.textContent('#tut-kicker') : '';
+      ok(shown && kicker.indexOf(tag) !== -1,
+        `${tag} が初めて出るステージ${first + 1}で ${tag} のチュートリアルが出る`);
+      ok(!shownEarly, `その手前のステージ${first} では ${tag} のチュートリアルは出ない`);
       await closeTutorial(p3);
-      await p3.evaluate(n => window.BitGame.loadLevel(n), w.start);
+
+      await p3.evaluate(n => window.BitGame.loadLevel(n), first);
       await p3.waitForTimeout(100);
       ok(!(await p3.locator('#tutorial-modal').isVisible()),
-        `${w.tag} のチュートリアルは2回目には出ない`);
+        `${tag} のチュートリアルは2回目には出ない`);
+    }
+
+    // ステージ選択で飛んだ先でも、未見のブロックの説明はきちんと出る
+    {
+      await p3.evaluate(([k]) => {
+        const p = JSON.parse(localStorage.getItem(k));
+        p.seenTutorials = ['INTRO', 'OR'];
+        localStorage.setItem(k, JSON.stringify(p));
+      }, [STORE_KEY]);
+      await p3.reload();
+      await p3.waitForTimeout(100);
+      await leaveHome(p3);
+      await closeTutorial(p3);
+      await p3.evaluate(n => window.BitGame.loadLevel(n), meta.n - 1);  // 最終ステージへ飛ぶ
+      await p3.waitForTimeout(150);
+      const seen = [];
+      for (let i = 0; i < 5 && await p3.locator('#tutorial-modal').isVisible(); i++) {
+        seen.push(await p3.textContent('#tut-kicker'));
+        await p3.click('#btn-tut-skip');
+        await p3.waitForTimeout(80);
+      }
+      ok(seen.length >= 2, '未見のブロックが複数あれば順に説明が出る（' + seen.join('→') + '）');
     }
 
     // 「あそびかた」メニューから見返せる
@@ -390,18 +441,19 @@ const snapshot = (page) => page.evaluate(() => ({
     // ドラッグ演出が動いているか（分身と指マーカーが表示される）
     await p3.click('#btn-help');
     await p3.click('#help-list [data-tut="OR"]');
-    await p3.waitForTimeout(900);
+    await p3.waitForTimeout(1150);   // つかんで運んでいる最中
     const dragging = await p3.evaluate(() => {
       const g = document.querySelector('#tut-demo .demo-ghost');
       const pt = document.querySelector('#tut-demo .demo-pointer');
-      const src = document.querySelector('#tut-demo .demo-src');
+      const srcBox = document.querySelector('#tut-demo .demo-slot-src .demo-slot-box');
       return {
         ghostShown: !!g && g.classList.contains('show'),
         ghostHasBlock: !!(g && g.querySelector('.block')),
         lifted: !!g && g.classList.contains('lifted'),
         pointerShown: !!pt && pt.classList.contains('show'),
-        srcDimmed: !!src && src.classList.contains('demo-dragging'),
-        moved: !!g && /translate\(/.test(g.style.transform)
+        srcDimmed: !!srcBox && srcBox.classList.contains('demo-slot-dim'),
+        moved: !!g && /translate\(/.test(g.style.transform),
+        labels: [...document.querySelectorAll('#tut-demo .demo-slot-label')].map(e => e.textContent)
       };
     });
     ok(dragging.ghostShown && dragging.ghostHasBlock && dragging.lifted,
@@ -409,19 +461,29 @@ const snapshot = (page) => page.evaluate(() => ({
     ok(dragging.pointerShown && dragging.srcDimmed,
       '指マーカーが出て、元のブロックは薄くなる');
     ok(dragging.moved, '分身が対象へ向かって動く');
-    await p3.waitForTimeout(900);
+    ok(dragging.labels.join('/') === '動かす/重ねる先/結果',
+      '「動かす・重ねる先・結果」のラベルが並ぶ（' + dragging.labels.join('/') + '）');
+    await p3.waitForTimeout(1450);   // 落として結果が出たあと
     const dropped = await p3.evaluate(() => {
-      const dst = document.querySelector('#tut-demo .demo-dst');
-      const src = document.querySelector('#tut-demo .demo-src');
+      const q = sel => document.querySelector('#tut-demo ' + sel);
+      const bitsOf = el => el ? [...el.querySelectorAll('.bit')].map(b => b.textContent).join('') : '';
       return {
-        srcConsumed: !!src && src.classList.contains('demo-consumed'),
-        srcOpacity: src ? +getComputedStyle(src).opacity : 1,
-        dstBits: dst ? [...dst.querySelectorAll('.bit')].map(b => b.textContent).join('') : ''
+        srcSpent: !!q('.demo-slot-src .demo-slot-spent'),
+        srcStillShowsBlock: !!q('.demo-slot-src .demo-slot-spent .block'),
+        spentLabel: (q('.demo-slot-src .demo-slot-label') || {}).textContent || '',
+        dstLabel: (q('.demo-slot-dst .demo-slot-label') || {}).textContent || '',
+        dstBits: bitsOf(q('.demo-slot-dst .demo-slot-box')),
+        resBits: bitsOf(q('.demo-slot-res .demo-slot-box')),
+        resDefeat: !!q('.demo-slot-res .demo-defeat')
       };
     });
-    ok(dropped.srcConsumed && dropped.srcOpacity < 0.1,
-      '落とすと重ねた側のブロックが消える（不透明度 ' + dropped.srcOpacity.toFixed(2) + '）');
+    ok(dropped.srcSpent && dropped.srcStillShowsBlock && dropped.spentLabel === '使って消えた',
+      '使ったブロックは薄く残るので、何を使ったか式に残る（' + dropped.spentLabel + '）');
+    ok(dropped.dstLabel === '0101 → 1111',
+      '重ねる先のラベルに before → after が出る（' + dropped.dstLabel + '）');
     ok(dropped.dstBits === '1111', '対象のbitが 0101 → 1111 に変わる（実際は ' + dropped.dstBits + '）');
+    ok(dropped.resBits === '1111' && dropped.resDefeat,
+      '結果スロットに 1111 と撃破が出て、式がそのまま残る');
     await closeTutorial(p3);
 
     await ctx3.close();
@@ -459,6 +521,7 @@ const snapshot = (page) => page.evaluate(() => ({
     const ctx4 = await browser.newContext({ viewport: { width: 900, height: 900 } });
     const p4 = await ctx4.newPage();
     await p4.goto(base);
+    await leaveHome(p4);
     await closeTutorial(p4);
 
     // ステージ1を最短でクリア → 金の星
@@ -533,6 +596,7 @@ const snapshot = (page) => page.evaluate(() => ({
 
     // 星はリロードしても残る
     await p4.reload();
+    await leaveHome(p4);
     await closeTutorial(p4);
     await p4.click('#btn-stages');
     const goldAfter = await p4.locator('.stage-btn .stage-star.gold').count();
@@ -540,11 +604,83 @@ const snapshot = (page) => page.evaluate(() => ({
     await ctx4.close();
   }
 
+  console.log('\n=== ホーム画面 ===');
+  {
+    const ctx5 = await browser.newContext({ viewport: { width: 900, height: 900 } });
+    const p5 = await ctx5.newPage();
+    await p5.goto(base);
+
+    ok(await p5.locator('#home-screen').isVisible(), '起動するとホーム画面が出る');
+    ok(!(await p5.locator('#tutorial-modal').isVisible()),
+      'ホーム画面の裏でチュートリアルが開いたりしない');
+    ok(await p5.textContent('#home-continue-label') === 'はじめる',
+      '初回は「はじめる」と表示される');
+    ok((await p5.textContent('#home-continue-sub')).indexOf('STAGE 1') === 0,
+      'STAGE 1 から始まる');
+
+    // ホームからステージ選択
+    await p5.click('#btn-home-stages');
+    await p5.waitForTimeout(100);
+    ok(await p5.locator('#stage-modal').isVisible(), 'ホームからステージ選択を開ける');
+    await p5.click('#btn-stage-close');
+    await p5.waitForTimeout(100);
+    ok(await p5.locator('#home-screen').isVisible(), '閉じるとホームに戻る');
+
+    // ホームからあそびかた
+    await p5.click('#btn-home-help');
+    await p5.waitForTimeout(100);
+    ok(await p5.locator('#help-modal').isVisible(), 'ホームからあそびかたを開ける');
+    await p5.click('#btn-help-close');
+
+    // はじめる → 遊べる状態になり、チュートリアルが出る
+    await p5.click('#btn-home-continue');
+    await p5.waitForTimeout(150);
+    ok(!(await p5.locator('#home-screen').isVisible()), '「はじめる」でホームが閉じる');
+    ok(await p5.locator('#tutorial-modal').isVisible(),
+      '遊び始めたタイミングでチュートリアルが出る');
+    await closeTutorial(p5);
+    ok(await p5.locator('#board .block').count() > 0, '盤面が操作できる状態になる');
+
+    // ステージ1をクリアしてホームへ戻ると「つづきから」になる
+    const h5 = await p5.evaluate(() => window.BitCore.hint(window.BitGame.state));
+    await p5.click(`#board .block[data-id="${h5.srcId}"]`);
+    await p5.click(`#board .block[data-id="${h5.dstId}"]`);
+    await p5.waitForSelector('#clear-modal:not([hidden])', { timeout: 3000 });
+    await p5.click('#btn-next');
+    await p5.click('#btn-home');
+    await p5.waitForTimeout(120);
+    ok(await p5.locator('#home-screen').isVisible(), 'ヘッダーの「ホーム」でホームに戻れる');
+    ok(await p5.textContent('#home-continue-label') === 'つづきから',
+      'クリア後は「つづきから」になる');
+    ok((await p5.textContent('#home-continue-sub')).indexOf('STAGE 2') === 0,
+      'つづきからは STAGE 2 を指す');
+    const stats = await p5.evaluate(() => ({
+      cleared: document.getElementById('home-cleared').textContent,
+      gold: document.getElementById('home-gold').textContent,
+      blue: document.getElementById('home-blue').textContent
+    }));
+    ok(stats.cleared === '1' && stats.gold === '1' && stats.blue === '0',
+      'ホームにクリア数と星の数が出る（クリア' + stats.cleared + ' 金' + stats.gold + ' 青' + stats.blue + '）');
+
+    // つづきから → STAGE 2 が始まる
+    await p5.click('#btn-home-continue');
+    await p5.waitForTimeout(120);
+    await closeTutorial(p5);
+    ok(await p5.textContent('#stage-no') === '2', '「つづきから」で STAGE 2 が始まる');
+
+    // リロードしてもホームから再開できる
+    await p5.reload();
+    await p5.waitForTimeout(150);
+    ok(await p5.locator('#home-screen').isVisible(), 'リロード後もホーム画面から始まる');
+    await ctx5.close();
+  }
+
   console.log('\n=== 進行状況の保存 ===');
   {
     const ctx2 = await browser.newContext();
     const p2 = await ctx2.newPage();
     await p2.goto(base);
+    await leaveHome(p2);
     await closeTutorial(p2);
     await p2.evaluate(() => window.BitGame.loadLevel(0));
     let guard = 0;
@@ -560,6 +696,7 @@ const snapshot = (page) => page.evaluate(() => ({
     ok(await p2.textContent('#stage-no') === '2', 'クリア後に次のステージへ進める');
 
     await p2.reload();
+    await leaveHome(p2);
     ok(await p2.textContent('#stage-no') === '2', 'リロードしても進行状況が残る');
 
     await p2.click('#btn-stages');

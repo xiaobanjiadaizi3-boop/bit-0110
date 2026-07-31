@@ -14,6 +14,7 @@
 <header class="topbar">
   <h1 class="title"><span class="title-bit">bit</span>-0110</h1>
   <div class="topbar-actions">
+    <button id="btn-home" class="btn btn-ghost" type="button">ホーム</button>
     <button id="btn-help" class="btn btn-ghost" type="button">あそびかた</button>
     <button id="btn-stages" class="btn btn-ghost" type="button">ステージ</button>
   </div>
@@ -114,6 +115,29 @@
     <div id="help-list" class="help-list"></div>
     <div class="modal-actions">
       <button id="btn-help-close" class="btn btn-primary" type="button">とじる</button>
+    </div>
+  </div>
+</div>
+
+<!-- ホーム画面 -->
+<div id="home-screen" class="home" hidden>
+  <div class="home-inner">
+    <h1 class="home-title"><span class="title-bit">bit</span>-0110</h1>
+    <p class="home-sub">0と1で悪を消すパズル・全<span id="home-total">310</span>ステージ</p>
+
+    <div class="home-stats">
+      <span class="home-stat"><b id="home-cleared">0</b><span>クリア</span></span>
+      <span class="home-stat home-stat-gold"><b id="home-gold">0</b><span>★ 最短</span></span>
+      <span class="home-stat home-stat-blue"><b id="home-blue">0</b><span>★ クリア</span></span>
+    </div>
+
+    <div class="home-menu">
+      <button id="btn-home-continue" class="btn btn-primary home-btn" type="button">
+        <span id="home-continue-label">はじめる</span>
+        <small id="home-continue-sub">STAGE 1</small>
+      </button>
+      <button id="btn-home-stages" class="btn home-btn" type="button">ステージ選択</button>
+      <button id="btn-home-help" class="btn home-btn" type="button">あそびかた</button>
     </div>
   </div>
 </div>
