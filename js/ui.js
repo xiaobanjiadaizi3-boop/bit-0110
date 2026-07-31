@@ -20,8 +20,7 @@
     moves: 0,
     selected: null,   // 選択中のブロックid
     drag: null,       // {id, el, moved}
-    busy: false,
-    hint: null
+    busy: false
   };
 
   var $ = function (id) { return document.getElementById(id); };
@@ -81,6 +80,9 @@
   function render() {
     var s = G.state;
     board.innerHTML = '';
+    // 盤面の列数・行数をCSSに渡す。マスの大きさは画面サイズに合わせてCSS側で決まる。
+    document.documentElement.style.setProperty('--cols', s.w);
+    document.documentElement.style.setProperty('--rows', s.h);
     board.style.gridTemplateColumns = 'repeat(' + s.w + ', var(--cell))';
 
     for (var y = 0; y < s.h; y++) {
@@ -102,13 +104,6 @@
       if (selEl) selEl.classList.add('selected');
       markTargets(G.selected, 'target-ok');
     }
-    if (G.hint) {
-      var hs = board.querySelector('.block[data-id="' + G.hint.srcId + '"]');
-      var hd = board.querySelector('.block[data-id="' + G.hint.dstId + '"]');
-      if (hs) hs.classList.add('hint-src');
-      if (hd) hd.classList.add('hint-dst');
-    }
-
     $('move-count').textContent = G.moves;
     $('par-count').textContent = G.level.par;
     $('bad-count').textContent = s.blocks.filter(function (b) { return b.type === 'bad'; }).length;
@@ -156,7 +151,6 @@
   /* ---------------- 操作 ---------------- */
   function clearSelection() {
     G.selected = null;
-    G.hint = null;
     setPreview('');
     render();
   }
@@ -175,7 +169,6 @@
 
     G.busy = true;
     G.selected = null;
-    G.hint = null;
     setPreview(describe(src, dst));
 
     setTimeout(function () {
@@ -278,8 +271,7 @@
     if (!start.moved) {
       start.moved = true;
       G.selected = start.id;
-      G.hint = null;
-      render();
+        render();
       var live = board.querySelector('.block[data-id="' + start.id + '"]');
       if (live) live.classList.add('dragging');
       showGhost(Core.findBlock(G.state, start.id));
@@ -354,8 +346,7 @@
         return;
       }
       G.selected = id;
-      G.hint = null;
-      setPreview('');
+        setPreview('');
       render();
       return;
     }
@@ -399,7 +390,6 @@
     G.history = [];
     G.moves = 0;
     G.selected = null;
-    G.hint = null;
     G.busy = false;
     $('stage-no').textContent = i + 1;
     $('stage-total').textContent = LEVELS.length;
@@ -431,7 +421,6 @@
     G.state = G.history.pop();
     G.moves = Math.max(0, G.moves - 1);
     G.selected = null;
-    G.hint = null;
     $('over-modal').hidden = true;
     setPreview('');
     render();
@@ -458,21 +447,6 @@
     if (!$('home-screen').hidden) return;   // ホームから開いた場合はホームのまま
     if (isStuckNow()) $('over-modal').hidden = false;
   }
-
-  $('btn-hint').addEventListener('click', function () {
-    if (G.busy) return;
-    var h = Core.hint(G.state);
-    if (!h) {
-      G.hint = null;
-      setPreview(Core.isCleared(G.state) ? 'クリア済み' : 'この盤面はもう解けない（詰み）', true);
-      render();
-      return;
-    }
-    G.hint = h;
-    G.selected = null;
-    render();
-    setPreview(describe(Core.findBlock(G.state, h.srcId), Core.findBlock(G.state, h.dstId)));
-  });
 
   $('btn-next').addEventListener('click', function () {
     $('clear-modal').hidden = true;

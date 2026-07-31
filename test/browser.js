@@ -249,14 +249,6 @@ const snapshot = (page) => page.evaluate(() => ({
     ok(!s.over && s.moves === 0 && s.blocks === initBlocks, '「1手もどす」で詰みから復帰できる');
   }
 
-  console.log('\n=== ヒント ===');
-  await page.evaluate(n => window.BitGame.loadLevel(n), meta.n - 1); // 最終ステージ
-  await page.click('#btn-hint');
-  ok(await page.locator('#board .block.hint-src').count() === 1 &&
-     await page.locator('#board .block.hint-dst').count() === 1,
-    'ヒントが次の一手を光らせる');
-  ok((await page.textContent('#preview')).includes('→'), 'ヒントの内容がプレビューに出る');
-
   console.log('\n=== ルール上の禁止操作 ===');
   {
     const r = await page.evaluate(() => {
@@ -851,10 +843,11 @@ const snapshot = (page) => page.evaluate(() => ({
       '読み上げ用のラベルが付いている（' + hdr.labels.join('/') + '）');
     ok(hdr.oneLine, 'ヘッダーのボタンが折り返さず1行に収まる');
     ok(!hdr.stageName, 'ステージ名の表示は削除されている');
-    ok(hdr.ctrls.length === 3 && hdr.ctrls.every(c => c.svg && c.text === ''),
-      'もどす・やりなおし・ヒントもアイコンになっている');
-    ok(hdr.ctrls.map(c => c.label).join('/') === '1手もどす/やりなおし/ヒント',
+    ok(hdr.ctrls.length === 2 && hdr.ctrls.every(c => c.svg && c.text === ''),
+      'もどす・やりなおしがアイコンになっている');
+    ok(hdr.ctrls.map(c => c.label).join('/') === '1手もどす/やりなおし',
       '操作ボタンにもラベルが付いている（' + hdr.ctrls.map(c => c.label).join('/') + '）');
+    ok(await page.locator('#btn-hint').count() === 0, 'ヒントボタンは削除されている');
   }
 
   console.log('\n=== 横画面 ===');
@@ -887,6 +880,9 @@ const snapshot = (page) => page.evaluate(() => ({
         boardFits: b.bottom <= window.innerHeight + 1 && b.top >= 0,
         menuOnTop: bar.bottom <= b.top + 1,
         infoLeft: head.right <= b.left + 1 && st.right <= b.left + 1,
+        infoNarrow: head.width <= 40 && st.width <= 40,
+        infoRotated: [head, st].every(() => true) &&
+          getComputedStyle(document.querySelector('.stage-no')).transform !== 'none',
         ctrlRight: ct.left >= b.right - 1,
         ctrlStacked: (() => {
           const bs = [...document.querySelectorAll('.controls .ctrl-btn')]
@@ -899,8 +895,12 @@ const snapshot = (page) => page.evaluate(() => ({
     ok(!land.hScroll, '横画面の盤面で横スクロールが出ない');
     ok(!land.vScroll, '横画面で縦スクロールも出ない');
     ok(land.boardFits, '盤面が画面内に収まる（高さ' + land.boardH + '/' + land.winH + '）');
+    const cellW = await p6.evaluate(() =>
+      Math.round(document.querySelector('#board .cell').getBoundingClientRect().width));
+    ok(cellW >= 50, '空いた幅のぶんマスが大きくなる（' + cellW + 'px）');
     ok(land.menuOnTop, '横画面でもメニューは上にある');
     ok(land.infoLeft, 'ステージ情報が盤面の左に並ぶ');
+    ok(land.infoNarrow && land.infoRotated, 'ステージ情報が縦書きの細い帯になる');
     ok(land.ctrlRight && land.ctrlStacked, '操作ボタンが盤面の右に縦に並ぶ');
 
     // 横画面でも遊べる
@@ -938,6 +938,30 @@ const snapshot = (page) => page.evaluate(() => ({
     ok(tut6.noScroll, '横画面のチュートリアルでスクロールが要らない');
     ok(tut6.twoCol, '横画面のチュートリアルは左右2カラムになる');
     await p6.click('#btn-tut-skip');
+
+    await p6.click('#btn-help');
+    await p6.waitForTimeout(150);
+    const help6 = await p6.evaluate(() => {
+      const card = document.querySelector('#help-modal .modal-card');
+      const c = card.getBoundingClientRect();
+      const r = k => document.querySelector('.help-item[data-tut="' + k + '"]').getBoundingClientRect();
+      const intro = r('INTRO'), or = r('OR'), not = r('NOT'), and = r('AND'), xor = r('XOR');
+      return {
+        fits: c.top >= -1 && c.bottom <= window.innerHeight + 1,
+        noScroll: card.scrollHeight <= card.clientHeight + 1,
+        introLeft: [or, not, and, xor].every(b => b.left >= intro.right - 1),
+        introTall: intro.height > or.height * 1.5,
+        grid2x2: Math.round(or.top) === Math.round(not.top) &&
+                 Math.round(and.top) === Math.round(xor.top) &&
+                 and.top > or.top &&
+                 Math.round(or.left) === Math.round(and.left) &&
+                 Math.round(not.left) === Math.round(xor.left)
+      };
+    });
+    ok(help6.fits && help6.noScroll, '横画面のあそびかたがスクロールなしで収まる');
+    ok(help6.introLeft && help6.introTall, '左に「あそびかた」が大きく置かれる');
+    ok(help6.grid2x2, '右にブロック4種が2x2で並ぶ');
+    await p6.click('#btn-help-close');
     ok(err6.length === 0, '横画面でエラーが出ない');
     await ctx6.close();
   }
@@ -1066,6 +1090,84 @@ const snapshot = (page) => page.evaluate(() => ({
     ok(Object.keys(contrast).length === 3,
       'OR・AND・XOR の3種すべてを検査できた（' + Object.keys(contrast).join('/') + '）');
     await closeTutorial(page);
+  }
+
+  console.log('\n=== スクロールしないで済むか（ステージ選択以外） ===');
+  {
+    const sizes = [
+      { w: 320, h: 568, n: '小さめ縦' },
+      { w: 375, h: 667, n: '標準縦' },
+      { w: 390, h: 844, n: '大きめ縦' },
+      { w: 667, h: 375, n: '小さめ横' },
+      { w: 812, h: 375, n: '標準横' },
+      { w: 844, h: 390, n: '大きめ横' }
+    ];
+    for (const sz of sizes) {
+      const ctxS = await browser.newContext({ viewport: { width: sz.w, height: sz.h } });
+      await ctxS.addInitScript(([k]) => {
+        localStorage.setItem(k, JSON.stringify({
+          cleared: Array.from({ length: 400 }, (_, i) => i), last: 309,
+          best: {}, seenTutorials: []
+        }));
+      }, [STORE_KEY]);
+      const ps = await ctxS.newPage();
+      await ps.goto(base);
+
+      const bad = [];
+      const pageScrolls = () => ps.evaluate(() =>
+        document.documentElement.scrollHeight > window.innerHeight + 2 ||
+        document.documentElement.scrollWidth > window.innerWidth + 1);
+      const cardScrolls = (sel) => ps.evaluate((s) => {
+        const c = document.querySelector(s);
+        if (!c || !c.offsetParent) return false;
+        const r = c.getBoundingClientRect();
+        return c.scrollHeight > c.clientHeight + 1 || r.top < -1 || r.bottom > window.innerHeight + 1;
+      }, sel);
+
+      if (await pageScrolls()) bad.push('ホーム');
+      // チュートリアル（最長のあそびかた）
+      await ps.evaluate(() => window.BitTutorial.open('INTRO'));
+      await ps.waitForTimeout(120);
+      for (let i = 0; i < 5; i++) {
+        if (await cardScrolls('.modal-card-tutorial')) { bad.push('チュートリアル' + (i + 1)); break; }
+        await ps.click('#btn-tut-next');
+        await ps.waitForTimeout(80);
+      }
+      await closeTutorial(ps);
+      await leaveHome(ps);
+      await closeTutorial(ps);
+      if (await pageScrolls()) bad.push('ゲーム画面');
+
+      await ps.click('#btn-help');
+      await ps.waitForTimeout(120);
+      if (await cardScrolls('#help-modal .modal-card')) bad.push('あそびかた');
+      await ps.click('#btn-help-close');
+
+      await ps.click('#btn-theme');
+      await ps.waitForTimeout(120);
+      if (await cardScrolls('#theme-modal .modal-card')) bad.push('画面の明るさ');
+      await ps.click('#btn-theme-close');
+
+      await ps.evaluate(() => { document.getElementById('clear-modal').hidden = false; });
+      await ps.waitForTimeout(80);
+      if (await cardScrolls('#clear-modal .modal-card')) bad.push('クリア');
+      await ps.evaluate(() => { document.getElementById('clear-modal').hidden = true; });
+
+      await ps.evaluate(() => { document.getElementById('over-modal').hidden = false; });
+      await ps.waitForTimeout(80);
+      if (await cardScrolls('#over-modal .modal-card')) bad.push('ゲームオーバー');
+      await ps.evaluate(() => { document.getElementById('over-modal').hidden = true; });
+
+      await ps.click('#btn-home');
+      await ps.click('#btn-reset-data');
+      await ps.waitForTimeout(120);
+      if (await cardScrolls('#reset-modal .modal-card')) bad.push('データ初期化');
+      await ps.click('#btn-reset-cancel');
+
+      ok(bad.length === 0,
+        sz.n + ' ' + sz.w + 'x' + sz.h + ' でスクロール不要' + (bad.length ? ' — 要スクロール: ' + bad.join(', ') : ''));
+      await ctxS.close();
+    }
   }
 
   console.log('\n=== アプリアイコン ===');

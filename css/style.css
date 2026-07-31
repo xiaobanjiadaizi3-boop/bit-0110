@@ -28,8 +28,20 @@
   --bad: #17070a;
   --bad-line: #ff4d5e;
 
-  --cell: 62px;
+  /* マスの大きさは「盤面が画面に収まる最大値」を自動で選ぶ。
+     --cols / --rows は表示中のステージに合わせてJSが入れる。 */
+  --cols: 6;
+  --rows: 4;
+  --cell-max: 62px;
+  --cell-min: 26px;
+  --chrome-w: 40px;    /* 盤面の左右で使う幅 */
+  --chrome-h: 306px;   /* 盤面の上下で使う高さ */
   --gap: 8px;
+  --cell: max(var(--cell-min), min(
+    var(--cell-max),
+    (100vw - var(--chrome-w)) / var(--cols) - var(--gap),
+    (100dvh - var(--chrome-h)) / var(--rows) - var(--gap)
+  ));
 }
 
 /* ライトテーマ */
@@ -1168,14 +1180,14 @@ code {
 
 /* ---------- 小さい画面 ---------- */
 @media (max-width: 560px) {
-  :root { --cell: 50px; --gap: 6px; }
+  :root { --cell-max: 52px; --gap: 6px; --chrome-h: 292px; }
   .stage-tip { font-size: 12px; }
   .bit { width: 9px; height: 13px; font-size: 9.5px; line-height: 13px; }
   .block-label { font-size: 10px; }
 }
 
 @media (max-width: 400px) {
-  :root { --cell: 43px; --gap: 5px; }
+  :root { --cell-max: 46px; --gap: 5px; --chrome-h: 286px; }
   .bit { width: 8px; height: 12px; font-size: 9px; line-height: 12px; }
   .controls .btn { padding: 8px 12px; font-size: 13px; }
   .world-grid { grid-template-columns: repeat(8, 1fr); }
@@ -1184,10 +1196,35 @@ code {
   .demo-slot-label { font-size: 9px; }
 }
 
+/* ---------- 背の低い縦画面（iPhone SE など） ---------- */
+@media (orientation: portrait) and (max-height: 640px) {
+  .modal-card { padding: 16px 18px; }
+  .modal-card-tutorial { max-width: 340px; }
+  .tut-kicker { margin-top: 6px; }
+  .tut-title { font-size: 15px; line-height: 1.4; }
+  .tut-demo { margin: 10px 0 8px; padding: 8px 4px 4px; }
+  .tut-text { font-size: 12.5px; line-height: 1.7; min-height: 0; }
+  .tut-loopbar { margin-top: 8px; }
+  .tut-dots { margin-top: 8px; }
+  .modal-actions { margin-top: 12px; }
+  .demo-slot-box, .demo-block, .demo-defeat { width: 46px; height: 46px; }
+  .demo-block.demo-big { width: 56px; height: 56px; }
+  .demo-big .bit { width: 11px; height: 15px; font-size: 11px; line-height: 15px; }
+  .demo-stage { min-height: 72px; gap: 6px; }
+  .demo-hint { font-size: 11px; min-height: 2.2em; margin-top: 6px; }
+  .demo-slot-label { font-size: 9px; }
+
+  .home-title { font-size: 32px; }
+  .home-stats { margin: 16px 0 18px; }
+  .home-btn { padding: 11px 14px; }
+  .help-item { padding: 9px 11px; }
+  .help-desc { font-size: 10.5px; }
+}
+
 /* ---------- 横画面 ---------- */
 /* 上=メニュー、中央=盤面、左=ステージ情報、右=操作ボタン */
 @media (orientation: landscape) and (max-height: 620px) {
-  :root { --cell: 46px; --gap: 6px; }
+  :root { --cell-max: 58px; --gap: 6px; --chrome-w: 196px; --chrome-h: 80px; }
 
   body { padding-top: 0; }
   .topbar { padding: 6px 2px 4px; max-width: 100%; }
@@ -1195,35 +1232,59 @@ code {
   .icon-btn { width: 34px; height: 34px; border-radius: 8px; }
   .icon-btn svg { width: 18px; height: 18px; }
 
+  /* 盤面を中央に置き、ステージ情報は縦書きの細い帯にして幅を稼ぐ */
   .layout {
     max-width: 100%;
     display: grid;
-    grid-template-columns: minmax(120px, 190px) auto minmax(70px, 190px);
-    grid-template-rows: auto auto;
-    grid-template-areas:
-      "head   board controls"
-      "status board controls";
+    grid-template-columns: auto auto auto auto;
+    grid-template-areas: "head status board controls";
     align-content: center;
     justify-content: center;
     align-items: center;
-    column-gap: 18px;
-    row-gap: 8px;
+    column-gap: 14px;
     padding: 0;
   }
-  .stage-head { grid-area: head; text-align: left; align-self: end; }
-  .statusbar  { grid-area: status; text-align: left; align-self: start; }
+
+  /* ステージ情報は横書きのまま90度回して縦帯にする。
+     writing-mode の縦書きは環境によって漢字の字送りが崩れるため、
+     確実に描画できる回転で「縦書き」にしている。 */
+  .stage-head, .statusbar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 74dvh;
+    max-height: 300px;
+    overflow: visible;
+  }
+  .stage-head { grid-area: head; }
+  .statusbar  { grid-area: status; }
+
+  .stage-no, .counters {
+    transform: rotate(90deg);
+    white-space: nowrap;
+    flex: none;
+  }
+  .stage-no {
+    font-size: 15px;
+    margin: 0;
+    letter-spacing: .08em;
+  }
+  .stage-word { font-size: 11px; color: var(--muted); letter-spacing: .18em; }
+  .stage-of { font-size: 12px; }
+  .world-name { margin-left: 12px; font-size: 12px; }
+  .counters { gap: 18px; font-size: 12px; }
+  .counter b { font-size: 13px; }
+  .stage-tip, .preview { display: none; }
+
   .board-wrap { grid-area: board; align-self: center; }
   .controls {
     grid-area: controls;
     flex-direction: column;   /* 右側に縦積み */
     justify-content: center;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
   }
-  .counters { justify-content: flex-start; gap: 12px; }
-  .preview { text-align: left; font-size: 11.5px; }
-  .stage-tip { margin: 0; max-width: none; font-size: 11.5px; line-height: 1.5; }
-  .stage-no { font-size: 15px; margin-bottom: 4px; }
   .ctrl-btn { width: 46px; height: 46px; border-radius: 12px; }
   .ctrl-btn svg { width: 21px; height: 21px; }
   .footer { display: none; }
@@ -1244,6 +1305,25 @@ code {
   .home-theme { left: 10px; bottom: 10px; padding: 6px 10px; font-size: 11px; }
   .stage-list { max-height: 56dvh; }
   .theme-item { padding: 9px 12px; }
+
+  /* 左に「あそびかた」、右にブロック4種を2x2で並べる */
+  .modal-card:has(> .help-list) { max-width: 640px; }
+  .help-list {
+    display: grid;
+    grid-template-columns: 1.15fr 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+    gap: 8px;
+  }
+  .help-item[data-tut="INTRO"] {
+    grid-row: 1 / span 2;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 8px;
+  }
+  .help-item { padding: 9px 11px; gap: 9px; }
+  .help-name { font-size: 13px; }
+  .help-desc { font-size: 10.5px; white-space: normal; }
 
   /* チュートリアルは左右2カラムにして、スクロールせず収める */
   .modal-card-tutorial {
@@ -1279,10 +1359,11 @@ code {
 
 /* 横画面でさらに低い端末 */
 @media (orientation: landscape) and (max-height: 430px) {
-  :root { --cell: 38px; --gap: 5px; }
+  :root { --cell-max: 54px; --gap: 5px; --chrome-w: 190px; --chrome-h: 72px; }
   .bit { width: 8px; height: 12px; font-size: 9px; line-height: 12px; }
   .block-label { font-size: 9px; }
-  .stage-tip { display: none; }
+  .stage-no { font-size: 13px; }
+  .counters { gap: 11px; }
   .home-title { font-size: 22px; }
   .home-stats { margin: 8px 0 10px; }
   .tut-demo { margin-top: 6px; }
