@@ -824,6 +824,117 @@ const snapshot = (page) => page.evaluate(() => ({
     await ctx2.close();
   }
 
+  console.log('\n=== ヘッダーのアイコン化・レイアウト ===');
+  {
+    const hdr = await page.evaluate(() => {
+      const btns = [...document.querySelectorAll('.topbar-actions .icon-btn')];
+      const bar = document.querySelector('.topbar').getBoundingClientRect();
+      return {
+        count: btns.length,
+        labels: btns.map(b => b.getAttribute('aria-label')),
+        svgs: btns.filter(b => b.querySelector('svg')).length,
+        noText: btns.every(b => b.textContent.trim() === ''),
+        // すべて同じ高さ＝折り返していない
+        oneLine: new Set(btns.map(b => Math.round(b.getBoundingClientRect().top))).size === 1,
+        barH: Math.round(bar.height),
+        stageName: !!document.getElementById('stage-name')
+      };
+    });
+    ok(hdr.count === 3 && hdr.svgs === 3 && hdr.noText,
+      'ヘッダーの3ボタンがアイコンになっている');
+    ok(hdr.labels.join('/') === 'ホーム/あそびかた/ステージ選択',
+      '読み上げ用のラベルが付いている（' + hdr.labels.join('/') + '）');
+    ok(hdr.oneLine, 'ヘッダーのボタンが折り返さず1行に収まる');
+    ok(!hdr.stageName, 'ステージ名の表示は削除されている');
+  }
+
+  console.log('\n=== 横画面 ===');
+  {
+    const ctx6 = await browser.newContext({ viewport: { width: 844, height: 390 } });
+    await ctx6.addInitScript(([k]) => {
+      localStorage.setItem(k, JSON.stringify({
+        cleared: Array.from({ length: 400 }, (_, i) => i), last: 309,
+        best: {}, seenTutorials: ['INTRO', 'OR', 'NOT', 'AND', 'XOR']
+      }));
+    }, [STORE_KEY]);
+    const p6 = await ctx6.newPage();
+    const err6 = [];
+    p6.on('pageerror', e => err6.push(String(e)));
+    await p6.goto(base);
+
+    ok(await p6.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
+      '横画面のホームで横スクロールが出ない');
+    await p6.click('#btn-home-continue');
+    await p6.waitForTimeout(150);
+    await closeTutorial(p6);
+
+    const land = await p6.evaluate(() => {
+      const b = document.querySelector('.board').getBoundingClientRect();
+      const h = document.querySelector('.stage-head').getBoundingClientRect();
+      return {
+        hScroll: document.documentElement.scrollWidth > window.innerWidth + 1,
+        vScroll: document.documentElement.scrollHeight > window.innerHeight + 2,
+        boardFits: b.bottom <= window.innerHeight + 1 && b.top >= 0,
+        sideBySide: h.left > b.right - 2,   // 盤面の右に情報が並ぶ
+        boardH: Math.round(b.height), winH: window.innerHeight
+      };
+    });
+    ok(!land.hScroll, '横画面の盤面で横スクロールが出ない');
+    ok(!land.vScroll, '横画面で縦スクロールも出ない');
+    ok(land.boardFits, '盤面が画面内に収まる（高さ' + land.boardH + '/' + land.winH + '）');
+    ok(land.sideBySide, '横画面では盤面の横に情報が並ぶ');
+
+    // 横画面でも遊べる
+    const h6 = await p6.evaluate(() => window.BitCore.hint(window.BitGame.state));
+    await p6.click(`#board .block[data-id="${h6.srcId}"]`);
+    await p6.click(`#board .block[data-id="${h6.dstId}"]`);
+    await p6.waitForFunction(() => !window.BitGame.busy, null, { timeout: 8000 });
+    ok(await p6.evaluate(() => window.BitGame.moves === 1), '横画面でもブロックを操作できる');
+
+    // モーダルも収まる
+    await p6.click('#btn-stages');
+    await p6.waitForTimeout(150);
+    ok(await p6.evaluate(() => {
+      const c = document.querySelector('#stage-modal .modal-card').getBoundingClientRect();
+      return c.top >= -1 && c.bottom <= window.innerHeight + 1;
+    }), '横画面でもステージ選択が画面に収まる');
+    await p6.click('#btn-stage-close');
+
+    await p6.click('#btn-help');
+    await p6.click('#help-list [data-tut="AND"]');
+    await p6.waitForTimeout(200);
+    ok(await p6.evaluate(() => {
+      const c = document.querySelector('.modal-card-tutorial').getBoundingClientRect();
+      return c.top >= -1 && c.bottom <= window.innerHeight + 1;
+    }), '横画面でもチュートリアルが画面に収まる');
+    ok(err6.length === 0, '横画面でエラーが出ない');
+    await ctx6.close();
+  }
+
+  console.log('\n=== アプリアイコン ===');
+  {
+    const icons = await page.evaluate(() => ({
+      apple: (document.querySelector('link[rel="apple-touch-icon"]') || {}).getAttribute
+        ? document.querySelector('link[rel="apple-touch-icon"]').getAttribute('href') : null,
+      manifest: (document.querySelector('link[rel="manifest"]') || {}).getAttribute
+        ? document.querySelector('link[rel="manifest"]').getAttribute('href') : null,
+      favicons: document.querySelectorAll('link[rel="icon"]').length
+    }));
+    ok(icons.apple === 'icons/icon-180.png', 'apple-touch-icon が設定されている');
+    ok(icons.favicons >= 2, 'ファビコンが設定されている（' + icons.favicons + '件）');
+    ok(icons.manifest === 'manifest.webmanifest', 'manifest がリンクされている');
+
+    // 実ファイルが配信できるか
+    for (const f of ['icons/icon-32.png', 'icons/icon-180.png', 'icons/icon-192.png',
+                     'icons/icon-512.png', 'icons/icon-maskable-512.png', 'manifest.webmanifest']) {
+      const r = await page.request.get(base + f);
+      if (!ok(r.ok(), f + ' が配信できる（' + r.status() + '）')) break;
+    }
+    const mf = await (await page.request.get(base + 'manifest.webmanifest')).json();
+    ok(mf.icons.length === 3 && mf.display === 'standalone' && mf.orientation === 'any',
+      'manifest にアイコン3種と standalone / orientation:any が入っている');
+  }
+
   console.log('\n=== スクリーンショット ===');
   const shotIdx = [0, ...meta.worlds.slice(1).map(w => w.start), meta.n - 1];
   for (const i of [...new Set(shotIdx)]) {

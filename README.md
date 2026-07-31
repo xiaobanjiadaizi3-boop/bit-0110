@@ -74,6 +74,12 @@ node scripts/generate-levels.js              # 310面すべて再生成
 node scripts/generate-levels.js --worlds 2   # 最初の2ワールドだけ
 ```
 
+## ホーム画面に追加して遊ぶ
+
+`manifest.webmanifest` とアプリアイコン（`icons/`）を用意してあるので、
+iOS/Android のブラウザから「ホーム画面に追加」するとアプリのように全画面で起動する。
+**縦画面・横画面のどちらにも対応**していて、横画面では盤面の横に情報とボタンが並ぶ。
+
 ## GitHub Pages で公開する
 
 このリポジトリは `main` ブランチのルートに `index.html` を置いた静的サイトなので、設定だけで公開できる。
@@ -89,6 +95,8 @@ node scripts/generate-levels.js --worlds 2   # 最初の2ワールドだけ
 ```
 bit-0110/
 ├── index.html          画面
+├── manifest.webmanifest  ホーム画面に追加したときの設定
+├── icons/              アプリアイコン（32/180/192/512, maskable）
 ├── css/style.css       見た目
 ├── js/core.js          ルール本体とソルバー（ブラウザ・Node 両対応）
 ├── js/levels.js        ステージデータ（自動生成。手で編集しない）

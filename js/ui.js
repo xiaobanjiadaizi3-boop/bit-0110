@@ -403,7 +403,6 @@
     $('stage-no').textContent = i + 1;
     $('stage-total').textContent = LEVELS.length;
     $('world-name').textContent = (WORLDS[G.level.world] || WORLDS[0]).name;
-    $('stage-name').textContent = G.level.name;
     $('stage-tip').textContent = G.level.tip || '';
     $('over-modal').hidden = true;
     $('clear-modal').hidden = true;
@@ -500,7 +499,7 @@
     $('home-gold').textContent = n.gold;
     $('home-blue').textContent = n.blue;
     $('home-continue-label').textContent = progress.cleared.length ? 'つづきから' : 'はじめる';
-    $('home-continue-sub').textContent = 'STAGE ' + (resume + 1) + ' — ' + LEVELS[resume].name;
+    $('home-continue-sub').textContent = 'STAGE ' + (resume + 1) + ' / ' + LEVELS.length;
     $('clear-modal').hidden = true;
     $('over-modal').hidden = true;
     $('stage-modal').hidden = true;
@@ -572,7 +571,7 @@
             b.appendChild(sp);
           }
           b.title = !isUnlocked(i) ? 'まだ開放されていない'
-            : LEVELS[i].name + (star === 'gold' ? '（最短クリア）' : star ? '（クリア済み）' : '');
+            : 'STAGE ' + (i + 1) + (star === 'gold' ? '（最短クリア）' : star ? '（クリア済み）' : '');
           b.addEventListener('click', function () {
             $('stage-modal').hidden = true;
             loadLevel(i);

@@ -6,7 +6,14 @@
 <title>bit-0110 — ビット演算パズル</title>
 <meta name="description" content="0と1の4桁bitを操作して悪ブロックを撃破するパズルゲーム。">
 <meta name="theme-color" content="#0d1117">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%230d1117'/><text x='16' y='22' font-size='14' font-family='monospace' fill='%237ee787' text-anchor='middle'>01</text></svg>">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/icon-32.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="apple-touch-icon" sizes="180x180" href="icons/icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="bit-0110">
+<meta name="mobile-web-app-capable" content="yes">
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -14,17 +21,22 @@
 <header class="topbar">
   <h1 class="title"><span class="title-bit">bit</span>-0110</h1>
   <div class="topbar-actions">
-    <button id="btn-home" class="btn btn-ghost" type="button">ホーム</button>
-    <button id="btn-help" class="btn btn-ghost" type="button">あそびかた</button>
-    <button id="btn-stages" class="btn btn-ghost" type="button">ステージ</button>
+    <button id="btn-home" class="icon-btn" type="button" title="ホーム" aria-label="ホーム">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.6 11.2 12 4l8.4 7.2"/><path d="M6 10.4V20h12v-9.6"/></svg>
+    </button>
+    <button id="btn-help" class="icon-btn" type="button" title="あそびかた" aria-label="あそびかた">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.6"/><path d="M9.4 9.4a2.7 2.7 0 1 1 3.4 2.6c-.6.2-.9.7-.9 1.4v.5"/><circle cx="11.9" cy="17" r="1.15" class="ic-dot"/></svg>
+    </button>
+    <button id="btn-stages" class="icon-btn" type="button" title="ステージ選択" aria-label="ステージ選択">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="7" height="7" rx="1.8"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.8"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.8"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.8"/></svg>
+    </button>
   </div>
 </header>
 
 <main class="layout">
 
   <section class="stage-head">
-    <div class="stage-no">STAGE <span id="stage-no">1</span> / <span id="stage-total">-</span><span id="world-name" class="world-name"></span></div>
-    <h2 id="stage-name" class="stage-name">はじめてのOR</h2>
+    <div class="stage-no">STAGE <span id="stage-no">1</span> <span class="stage-of">/ <span id="stage-total">-</span></span><span id="world-name" class="world-name"></span></div>
     <p id="stage-tip" class="stage-tip"></p>
   </section>
 
